@@ -1,0 +1,395 @@
+
+<template>
+	<view class="container">
+		<scroll-view class="scroll-content" scroll-y="true" @scroll="onScroll">
+			<!-- 活动统计 -->
+			<StatCard 
+				:totalActivities="totalActivities" 
+				:totalParticipants="totalParticipants" 
+				:totalCheckins="totalCheckins" 
+				:avgRate="avgRate" 
+			/>
+			
+			<!-- 搜索和筛选区域 (可折叠) -->
+			<view v-if="showSearch" class="search-section card">
+				<view class="card-header">
+					<text class="card-header-title">搜索活动</text>
+				</view>
+				<view class="card-content">
+					<view class="search-box">
+						<text class="search-icon">🔍</text>
+						<input class="search-input" v-model="searchQuery" placeholder="搜索活动名称或地点..." />
+					</view>
+					
+					<view class="filter-section">
+						<view class="filter-buttons">
+							<view 
+								v-for="filter in filters" 
+								:key="filter.value" 
+								:class="['filter-btn', currentFilter === filter.value ? 'active' : '']"
+								@click="currentFilter = filter.value"
+								hover-class="hover-opacity"
+							>
+								<text :class="['filter-text', currentFilter === filter.value ? 'active-text' : '']">{{ filter.label }}</text>
+							</view>
+						</view>
+					</view>
+				</view>
+			</view>
+
+			<!-- 活动列表 -->
+			<view class="activity-list-section card">
+				<view class="card-header">
+					<view class="header-left">
+						<text class="card-header-title">活动列表</text>
+						<text v-if="filteredActivities.length > 0" class="list-count">{{ filteredActivities.length }}个活动</text>
+					</view>
+					<view class="header-right">
+						<view class="icon-btn" @click="toggleSearch" hover-class="hover-opacity">
+							<text class="icon-text">🔍</text>
+						</view>
+						<view class="primary-btn-small" @click="goToCreate" hover-class="hover-opacity">
+							<text class="icon-plus-small">+</text>
+							<text class="btn-text-small">新建</text>
+						</view>
+					</view>
+				</view>
+				
+				<view class="card-content list-container">
+					<view v-if="filteredActivities.length === 0" class="empty-state">
+						<text class="empty-icon">📅</text>
+						<text class="empty-title">暂无活动</text>
+						<text class="empty-desc">点击"新建"创建您的第一个活动</text>
+						<view class="empty-action" @click="goToCreate" hover-class="hover-opacity">
+							<text class="empty-action-text">去创建活动</text>
+						</view>
+					</view>
+					
+					<ActivityItem 
+						v-for="activity in filteredActivities" 
+						:key="activity.id" 
+						:activity="activity"
+						@click="goToDetail(activity.id)"
+						@share="onShare(activity.id)"
+					/>
+				</view>
+			</view>
+		</scroll-view>
+	</view>
+</template>
+
+<script>
+	import StatCard from '@/components/StatCard.uvue'
+	import ActivityItem from '@/components/ActivityItem.uvue'
+	import { activitiesState } from '@/store/index.uts'
+
+	export default {
+		components: {
+			StatCard,
+			ActivityItem
+		},
+		data() {
+			return {
+				showSearch: false,
+				searchQuery: '',
+				lastScrollTop: 0,
+				tabBarVisible: true,
+				lastTabBarToggleAt: 0,
+				currentFilter: 'all',
+				filters: [
+					{ label: '全部', value: 'all' },
+					{ label: '进行中', value: 'ongoing' },
+					{ label: '即将开始', value: 'upcoming' },
+					{ label: '已结束', value: 'ended' }
+				]
+			}
+		},
+		computed: {
+			activities() {
+				return activitiesState.activities;
+			},
+			totalActivities() {
+				return this.activities.length;
+			},
+			totalParticipants() {
+				return this.activities.reduce((sum, a) => sum + (a.participants || 0), 0);
+			},
+			totalCheckins() {
+				return this.activities.reduce((sum, a) => sum + (a.checkins || 0), 0);
+			},
+			avgRate() {
+				if (this.totalParticipants === 0) return 0;
+				return Math.round((this.totalCheckins / this.totalParticipants) * 100);
+			},
+			filteredActivities() {
+				let list = this.activities.filter(activity => {
+					if (this.currentFilter !== 'all' && activity.status !== this.currentFilter) {
+						return false;
+					}
+					if (this.searchQuery) {
+						const query = this.searchQuery.toLowerCase();
+						return activity.name.toLowerCase().includes(query) || 
+							(activity.location && activity.location.toLowerCase().includes(query));
+					}
+					return true;
+				});
+
+				return list.sort((a, b) => {
+					const dateA = new Date(`${a.date}T${a.time}`);
+					const dateB = new Date(`${b.date}T${b.time}`);
+					
+					const getStatusPriority = (status) => {
+						if (status === 'ongoing') return 1;
+						if (status === 'upcoming') return 2;
+						return 3;
+					};
+
+					const priorityA = getStatusPriority(a.status);
+					const priorityB = getStatusPriority(b.status);
+
+					if (priorityA !== priorityB) {
+						return priorityA - priorityB;
+					}
+
+					if (priorityA === 1 || priorityA === 2) {
+						return dateA.getTime() - dateB.getTime();
+					} else {
+						return dateB.getTime() - dateA.getTime();
+					}
+				});
+			}
+		},
+		onShow() {
+			this.lastScrollTop = 0;
+			this.tabBarVisible = true;
+			uni.showTabBar({ animation: false });
+		},
+		methods: {
+			onScroll(e: ScrollEvent) {
+				const currentScroll = e.detail.scrollTop;
+				if (currentScroll < 0) {
+					return;
+				}
+				if (this.showSearch) {
+					if (!this.tabBarVisible) {
+						uni.showTabBar({ animation: false });
+						this.tabBarVisible = true;
+					}
+					this.lastScrollTop = currentScroll;
+					return;
+				}
+				const delta = currentScroll - this.lastScrollTop;
+				const now = Date.now();
+				if (Math.abs(delta) < 12) {
+					this.lastScrollTop = currentScroll;
+					return;
+				}
+				if (now - this.lastTabBarToggleAt < 220) {
+					this.lastScrollTop = currentScroll;
+					return;
+				}
+				if (delta > 0 && currentScroll > 120 && this.tabBarVisible) {
+					uni.hideTabBar({ animation: false });
+					this.tabBarVisible = false;
+					this.lastTabBarToggleAt = now;
+				} else if (delta < 0 && !this.tabBarVisible) {
+					uni.showTabBar({ animation: false });
+					this.tabBarVisible = true;
+					this.lastTabBarToggleAt = now;
+				}
+				this.lastScrollTop = currentScroll;
+			},
+			toggleSearch() {
+				this.showSearch = !this.showSearch;
+			},
+			goToCreate() {
+				uni.switchTab({
+					url: '/pages/activity/create/create'
+				});
+			},
+			goToDetail(id) {
+				uni.navigateTo({
+					url: `/pages/activity/detail/detail?id=${id}`
+				});
+			},
+			onShare(id: number) {
+				uni.navigateTo({
+					url: `/pages/activity/share/share?id=${id}`
+				});
+			}
+		}
+	}
+</script>
+
+<style scoped>
+	.container {
+		flex: 1;
+		background-color: #F2F2F7;
+	}
+
+
+
+	.header-left {
+		flex-direction: row;
+		align-items: center;
+	}
+
+	.header-right {
+		flex-direction: row;
+		align-items: center;
+	}
+
+	.icon-btn {
+		width: 32px;
+		height: 32px;
+		align-items: center;
+		justify-content: center;
+		margin-right: 8px;
+		background-color: #F2F2F7;
+		border-radius: 16px;
+	}
+
+	.icon-text {
+		font-size: 16px;
+		line-height: 1;
+	}
+
+	.primary-btn-small {
+		flex-direction: row;
+		align-items: center;
+		background-color: #007AFF;
+		padding: 4px 10px;
+		border-radius: 14px;
+		height: 28px;
+	}
+
+	.icon-plus-small {
+		color: #FFFFFF;
+		font-size: 14px;
+		font-weight: 700;
+		margin-right: 2px;
+		line-height: 1;
+	}
+
+	.btn-text-small {
+		color: #FFFFFF;
+		font-size: 12px;
+		font-weight: 600;
+	}
+
+	.scroll-content {
+		flex: 1;
+		padding: 16px 16px calc(16px + env(safe-area-inset-bottom));
+	}
+
+	.search-section {
+		margin-top: 16px;
+		animation: slideDown 0.3s ease;
+	}
+
+	@keyframes slideDown {
+		from { opacity: 0; transform: translateY(-10px); }
+		to { opacity: 1; transform: translateY(0); }
+	}
+
+	.search-box {
+		flex-direction: row;
+		align-items: center;
+		background-color: #F2F2F7;
+		border-radius: 8px;
+		padding: 8px 12px;
+		margin-bottom: 12px;
+	}
+
+	.search-icon {
+		margin-right: 8px;
+		font-size: 14px;
+	}
+
+	.search-input {
+		flex: 1;
+		font-size: 14px;
+		color: #000000;
+	}
+
+	.filter-section {
+		width: 100%;
+	}
+
+	.filter-buttons {
+		flex-direction: row;
+		align-items: center;
+		justify-content: space-between;
+	}
+
+	.filter-btn {
+		padding: 6px 12px;
+		border-radius: 16px;
+		background-color: #F2F2F7;
+		border: 0.5px solid #C6C6C8;
+	}
+
+	.filter-btn.active {
+		background-color: #007AFF;
+		border-color: #007AFF;
+	}
+
+	.filter-text {
+		font-size: 12px;
+		color: #8E8E93;
+	}
+
+	.active-text {
+		color: #FFFFFF;
+	}
+
+	.activity-list-section {
+		margin-top: 16px;
+	}
+
+	.list-count {
+		margin-left: 8px;
+		font-size: 12px;
+		color: #8E8E93;
+	}
+
+	.list-container {
+		padding: 0;
+	}
+
+	.empty-state {
+		padding: 40px 20px;
+		align-items: center;
+		justify-content: center;
+	}
+
+	.empty-icon {
+		font-size: 48px;
+		margin-bottom: 12px;
+	}
+
+	.empty-title {
+		font-size: 18px;
+		font-weight: 600;
+		color: #000000;
+		margin-bottom: 4px;
+	}
+
+	.empty-desc {
+		font-size: 14px;
+		color: #8E8E93;
+		margin-bottom: 16px;
+	}
+
+	.empty-action {
+		padding: 8px 14px;
+		background-color: #007AFF;
+		border-radius: 16px;
+	}
+
+	.empty-action-text {
+		font-size: 13px;
+		font-weight: 600;
+		color: #FFFFFF;
+	}
+</style>

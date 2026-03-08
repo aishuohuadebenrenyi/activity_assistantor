@@ -1,0 +1,285 @@
+
+<template>
+	<view class="container">
+		<scroll-view class="scroll-content" scroll-y="true" :style="{ paddingBottom: keyboardHeight > 0 ? (keyboardHeight + 20) + 'px' : 'calc(16px + env(safe-area-inset-bottom))' }">
+			<view class="form-card card">
+				<view class="card-header">
+					<text class="card-header-title">活动信息</text>
+				</view>
+				<view class="card-content">
+					<view class="form-group">
+						<text class="label">活动名称</text>
+						<input class="form-input" v-model="form.name" placeholder="请输入活动名称" />
+					</view>
+					
+					<view class="form-group row-group">
+						<view class="form-item half">
+							<text class="label">活动日期</text>
+							<picker mode="date" :value="form.date" @change="onDateChange">
+								<view class="picker-box" hover-class="hover-opacity">
+									<text class="picker-text">{{ form.date || '请选择日期' }}</text>
+								</view>
+							</picker>
+						</view>
+						<view class="form-item half">
+							<text class="label">活动时间</text>
+							<picker mode="time" :value="form.time" @change="onTimeChange">
+								<view class="picker-box" hover-class="hover-opacity">
+									<text class="picker-text">{{ form.time || '请选择时间' }}</text>
+								</view>
+							</picker>
+						</view>
+					</view>
+
+					<view class="form-group">
+						<text class="label">活动地点</text>
+						<input class="form-input" v-model="form.location" placeholder="请输入活动地点" />
+					</view>
+
+					<view class="form-group">
+						<text class="label">最多参加人数</text>
+						<input class="form-input" type="number" v-model="form.capacity" placeholder="不限人数请填0" />
+					</view>
+
+					<view class="form-group">
+						<text class="label">活动介绍</text>
+						<textarea class="form-textarea" v-model="form.description" placeholder="请输入活动介绍内容..." />
+					</view>
+				</view>
+			</view>
+
+			<view class="theme-card card">
+				<view class="card-header">
+					<text class="card-header-title">选择主题</text>
+					</view>
+				<view class="card-content">
+					<scroll-view class="theme-scroll" scroll-x="true" show-scrollbar="false">
+						<view class="theme-list">
+							<view 
+								v-for="theme in themes" 
+								:key="theme.id" 
+								:class="['theme-item', form.theme === theme.id ? 'active-theme' : '']"
+								@click="form.theme = theme.id"
+								hover-class="hover-opacity"
+							>
+								<text class="theme-icon">{{ theme.icon }}</text>
+								<text :class="['theme-name', form.theme === theme.id ? 'active-theme-text' : '']">{{ theme.name }}</text>
+							</view>
+						</view>
+					</scroll-view>
+				</view>
+			</view>
+
+			<view class="footer-btn-container">
+				<button :class="['btn', isSubmitting ? 'btn-disabled' : 'btn-primary']" :disabled="isSubmitting" @click="submitForm" hover-class="hover-opacity">
+					<text class="btn-text">{{ isSubmitting ? '创建中...' : '立即创建活动' }}</text>
+				</button>
+			</view>
+		</scroll-view>
+	</view>
+</template>
+
+<script>
+	import { addActivity, Activity } from '@/store/index.uts'
+
+	export default {
+		data() {
+			return {
+				keyboardHeight: 0,
+				isSubmitting: false,
+				form: {
+					name: '',
+					date: '',
+					time: '',
+					location: '',
+					capacity: 0,
+					description: '',
+					theme: 'business'
+				},
+				themes: [
+					{ id: 'business', name: '商务', icon: '💼' },
+					{ id: 'party', name: '聚会', icon: '🎉' },
+					{ id: 'sports', name: '运动', icon: '⚽' },
+					{ id: 'study', name: '学习', icon: '📚' },
+					{ id: 'other', name: '其他', icon: '✨' }
+				]
+			}
+		},
+		onLoad() {
+			uni.onKeyboardHeightChange((res) => {
+				this.keyboardHeight = res.height;
+			});
+		},
+		methods: {
+			goBack() {
+				uni.navigateBack();
+			},
+			onDateChange(e) {
+				this.form.date = e.detail.value;
+			},
+			onTimeChange(e) {
+				this.form.time = e.detail.value;
+			},
+			submitForm() {
+				if (this.isSubmitting) return;
+				if (!this.form.name || !this.form.date || !this.form.time) {
+					uni.showToast({ title: '请完善活动信息', icon: 'none' });
+					return;
+				}
+				this.isSubmitting = true;
+
+				const newActivity = {
+					id: Date.now(),
+					name: this.form.name,
+					date: this.form.date,
+					time: this.form.time,
+					location: this.form.location,
+					status: 'upcoming',
+					participants: 0,
+					checkins: 0,
+					capacity: this.form.capacity,
+					description: this.form.description,
+					views: 0,
+					checkinRecords: [],
+					type: this.form.theme,
+					createdAt: new Date().toISOString()
+				} as Activity;
+
+				addActivity(newActivity);
+				
+				uni.redirectTo({
+					url: `/pages/activity/success/success?id=${newActivity.id}`
+				});
+			}
+		}
+	}
+</script>
+
+<style scoped>
+	.container {
+		flex: 1;
+		background-color: #F2F2F7;
+	}
+
+
+
+	.scroll-content {
+		flex: 1;
+		padding: 16px 16px 0;
+	}
+
+	.form-group {
+		margin-bottom: 16px;
+	}
+
+	.row-group {
+		flex-direction: row;
+		justify-content: space-between;
+	}
+
+	.half {
+		width: 48%;
+	}
+
+	.label {
+		font-size: 14px;
+		color: #8E8E93;
+		margin-bottom: 8px;
+	}
+
+	.form-input {
+		height: 44px;
+		background-color: #F2F2F7;
+		border-radius: 8px;
+		padding: 0 12px;
+		font-size: 16px;
+	}
+
+	.picker-box {
+		height: 44px;
+		background-color: #F2F2F7;
+		border-radius: 8px;
+		padding: 0 12px;
+		justify-content: center;
+	}
+
+	.picker-text {
+		font-size: 16px;
+		color: #000000;
+	}
+
+	.form-textarea {
+		height: 120px;
+		background-color: #F2F2F7;
+		border-radius: 8px;
+		padding: 12px;
+		font-size: 16px;
+		width: 100%;
+	}
+
+	.theme-scroll {
+		width: 100%;
+	}
+
+	.theme-list {
+		flex-direction: row;
+		padding: 4px 0;
+	}
+
+	.theme-item {
+		width: 70px;
+		height: 80px;
+		background-color: #F2F2F7;
+		border-radius: 12px;
+		margin-right: 12px;
+		justify-content: center;
+		align-items: center;
+		border: 1px solid transparent;
+	}
+
+	.active-theme {
+		background-color: rgba(0, 122, 255, 0.1);
+		border-color: #007AFF;
+	}
+
+	.theme-icon {
+		font-size: 24px;
+		margin-bottom: 4px;
+	}
+
+	.theme-name {
+		font-size: 12px;
+		color: #8E8E93;
+	}
+
+	.active-theme-text {
+		color: #007AFF;
+		font-weight: 600;
+	}
+
+	.footer-btn-container {
+		margin: 24px 0 0;
+	}
+
+	.btn {
+		height: 50px;
+		border-radius: 12px;
+		justify-content: center;
+		align-items: center;
+	}
+
+	.btn-primary {
+		background-color: #007AFF;
+		box-shadow: 0 4px 12px rgba(0, 122, 255, 0.3);
+	}
+
+	.btn-disabled {
+		background-color: #C7C7CC;
+	}
+
+	.btn-text {
+		color: #FFFFFF;
+		font-size: 17px;
+		font-weight: 600;
+	}
+</style>

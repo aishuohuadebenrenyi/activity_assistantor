@@ -1,0 +1,123 @@
+
+<template>
+	<view class="participant-item" @click="onClick">
+		<view class="avatar">
+			<text class="avatar-text">{{ initial }}</text>
+		</view>
+		<view class="info">
+			<text class="name">{{ participant.name }}</text>
+			<text class="phone">{{ participant.phone }}</text>
+		</view>
+		<view class="status">
+			<view :class="['status-icon', statusClass]">
+				<text class="status-icon-text">{{ statusIcon }}</text>
+			</view>
+			<text class="status-time">{{ statusText }}</text>
+		</view>
+	</view>
+</template>
+
+<script>
+	export default {
+		props: {
+			participant: {
+				type: Object,
+				required: true
+			}
+		},
+		computed: {
+			initial() {
+				return this.participant.name ? this.participant.name.charAt(0) : '?';
+			},
+			statusIcon() {
+				return this.participant.status === 'checked' ? '✓' : '○';
+			},
+			statusClass() {
+				return this.participant.status === 'checked' ? 'status-checked' : 'status-unchecked';
+			},
+			statusText() {
+				return this.participant.status === 'checked' ? this.participant.checkinTime : '未签到';
+			}
+		},
+		methods: {
+			onClick() {
+				this.$emit('click', this.participant);
+			}
+		}
+	}
+</script>
+
+<style scoped>
+	.participant-item {
+		flex-direction: row;
+		align-items: center;
+		padding: 12px 16px;
+		border-bottom: 0.5px solid #C6C6C8;
+		background-color: #FFFFFF;
+	}
+
+	.avatar {
+		width: 36px;
+		height: 36px;
+		border-radius: 18px;
+		background-color: #007AFF;
+		justify-content: center;
+		align-items: center;
+		margin-right: 12px;
+	}
+
+	.avatar-text {
+		color: #FFFFFF;
+		font-size: 14px;
+		font-weight: 600;
+	}
+
+	.info {
+		flex: 1;
+	}
+
+	.name {
+		font-size: 16px;
+		font-weight: 600;
+		color: #000000;
+		margin-bottom: 2px;
+	}
+
+	.phone {
+		font-size: 12px;
+		color: #8E8E93;
+	}
+
+	.status {
+		align-items: center;
+		justify-content: center;
+	}
+
+	.status-icon {
+		width: 24px;
+		height: 24px;
+		border-radius: 12px;
+		justify-content: center;
+		align-items: center;
+		margin-bottom: 4px;
+	}
+
+	.status-icon-text {
+		color: #FFFFFF;
+		font-size: 12px;
+		font-weight: 600;
+	}
+
+	.status-checked {
+		background-color: #34C759;
+	}
+
+	.status-unchecked {
+		background-color: #C7C7CC;
+	}
+
+	.status-time {
+		font-size: 12px;
+		color: #8E8E93;
+	}
+</style>

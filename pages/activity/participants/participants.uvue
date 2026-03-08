@@ -1,0 +1,541 @@
+
+<template>
+	<view class="container">
+		<scroll-view class="scroll-content" scroll-y="true">
+			<view v-if="!isActivityValid" class="invalid-state card">
+				<view class="card-content invalid-content">
+					<text class="invalid-title">活动不存在或已删除</text>
+					<text class="invalid-desc">请返回首页重新选择活动</text>
+					<view class="invalid-btn" @click="goHome" hover-class="hover-opacity">
+						<text class="invalid-btn-text">返回首页</text>
+					</view>
+				</view>
+			</view>
+			<view v-else>
+			<!-- 统计概览 -->
+			<view class="stats-card card">
+				<view class="card-header">
+					<text class="card-header-title">报名统计</text>
+				</view>
+				<view class="card-content">
+					<view class="stats-grid">
+						<view class="stat-item">
+							<text class="stat-value">{{ totalCount }}</text>
+							<text class="stat-label">报名人数</text>
+						</view>
+						<view class="stat-item">
+							<text class="stat-value success-text">{{ checkedCount }}</text>
+							<text class="stat-label">已签到</text>
+						</view>
+						<view class="stat-item">
+							<text class="stat-value warning-text">{{ uncheckedCount }}</text>
+							<text class="stat-label">未签到</text>
+						</view>
+						<view class="stat-item">
+							<text class="stat-value">{{ checkinRate }}%</text>
+							<text class="stat-label">签到率</text>
+						</view>
+					</view>
+				</view>
+			</view>
+
+			<!-- 列表区域 -->
+			<view class="participants-section card">
+				<view class="card-header">
+					<view class="header-left">
+						<text class="card-header-title">报名人员</text>
+						<text class="section-count">{{ totalCount }}人 (已签{{ checkedCount }}人)</text>
+					</view>
+					<view class="header-action" @click="onExport" hover-class="hover-opacity">
+						<text class="action-text">导出</text>
+					</view>
+				</view>
+				
+				<view class="card-content">
+					<view class="controls">
+						<view class="search-box">
+							<text class="search-icon">🔍</text>
+							<input class="search-input" v-model="searchQuery" placeholder="搜索姓名或手机号..." />
+						</view>
+						
+						<view class="filter-buttons">
+							<view 
+								v-for="filter in filters" 
+								:key="filter.value" 
+								:class="['filter-btn', currentFilter === filter.value ? 'active' : '']"
+								@click="currentFilter = filter.value"
+								hover-class="hover-opacity"
+							>
+								<text :class="['filter-text', currentFilter === filter.value ? 'active-text' : '']">{{ filter.label }}</text>
+							</view>
+						</view>
+					</view>
+					
+					<view class="participants-list">
+						<view v-if="filteredParticipants.length === 0" class="empty-list">
+							<text class="empty-text">未找到匹配人员</text>
+						</view>
+						
+						<view 
+							v-for="(p, index) in filteredParticipants" 
+							:key="index" 
+							class="participant-item"
+						>
+							<view class="avatar" :style="{'background-color': getAvatarColor(p.name)}">
+								<text class="avatar-text">{{ p.name.charAt(0) }}</text>
+							</view>
+							<view class="info">
+								<text class="name">{{ p.name }}</text>
+								<text class="phone">{{ p.phone }}</text>
+							</view>
+							<view class="status-action" @click="toggleCheckin(p)" hover-class="hover-opacity">
+								<view :class="['status-icon', p.checked ? 'status-checked' : 'status-unchecked']">
+									<text class="status-icon-text">{{ p.checked ? '✓' : '○' }}</text>
+								</view>
+								<text class="status-time">{{ p.checked ? (p.checkinTime || '已签到') : '未签到' }}</text>
+							</view>
+						</view>
+					</view>
+				</view>
+			</view>
+			</view>
+		</scroll-view>
+	</view>
+</template>
+
+<script>
+	import { activitiesState, updateActivity, Activity } from '@/store/index.uts'
+
+	type Participant = {
+		name: string,
+		phone: string,
+		checked: boolean,
+		checkinTime: string | null
+	}
+
+	export default {
+		data() {
+			return {
+				activityId: 0,
+				searchQuery: '',
+				currentFilter: 'all',
+				filters: [
+					{ label: '全部', value: 'all' },
+					{ label: '已签到', value: 'checked' },
+					{ label: '未签到', value: 'unchecked' }
+				]
+			}
+		},
+		onLoad(options) {
+			const id = options['id'];
+			if (id != null) {
+				this.activityId = parseInt(id as string);
+			}
+		},
+		computed: {
+			activity(): Activity {
+				const found = activitiesState.activities.find((a: Activity): boolean => a.id === this.activityId);
+				if (found != null) {
+					return found;
+				}
+				return {
+					id: 0,
+					name: '',
+					type: '',
+					date: '',
+					time: '',
+					location: '',
+					description: '',
+					capacity: 0,
+					participants: 0,
+					checkins: 0,
+					views: 0,
+					status: '',
+					checkinRecords: [],
+					createdAt: ''
+				} as Activity;
+			},
+			isActivityValid(): boolean {
+				return this.activity.id !== 0;
+			},
+			totalCount(): number {
+				return this.activity.participants || 0;
+			},
+			checkedCount(): number {
+				return this.activity.checkinRecords ? this.activity.checkinRecords.length : 0;
+			},
+			uncheckedCount(): number {
+				return Math.max(0, this.totalCount - this.checkedCount);
+			},
+			checkinRate(): number {
+				if (this.totalCount === 0) return 0;
+				return Math.round((this.checkedCount / this.totalCount) * 100);
+			},
+			// 模拟所有参与者数据
+			allParticipants(): Participant[] {
+				if (!this.activity.id) return [] as Participant[];
+				
+				const list: Participant[] = [];
+				const names = ['张三', '李四', '王五', '赵六', '钱七', '孙八', '周九', '吴十', '陈十一', '刘十二'];
+				const phones = ['138****1234', '139****5678', '136****9012', '137****3456', '135****7890', '158****1111', '159****2222', '186****3333'];
+				
+				for (let i = 0; i < this.totalCount; i++) {
+					const name = names[i % names.length] + (i >= names.length ? (i + 1) : '');
+					const phone = phones[i % phones.length];
+					
+					// 检查是否已签到
+					const record = this.activity.checkinRecords.find(r => r.name === name);
+					
+					const p: Participant = {
+						name: name,
+						phone: phone,
+						checked: record != null,
+						checkinTime: record != null ? record.time : null
+					};
+					list.push(p);
+				}
+				return list;
+			},
+			filteredParticipants(): Participant[] {
+				return this.allParticipants.filter((p: Participant): boolean => {
+					if (this.currentFilter === 'checked' && !p.checked) return false;
+					if (this.currentFilter === 'unchecked' && p.checked) return false;
+					
+					if (this.searchQuery !== '') {
+						const query = this.searchQuery.toLowerCase();
+						return p.name.toLowerCase().includes(query) || p.phone.includes(query);
+					}
+					return true;
+				});
+			}
+		},
+		methods: {
+			goBack() {
+				uni.navigateBack();
+			},
+			onExport() {
+				if (!this.isActivityValid) {
+					uni.showToast({ title: '活动不存在', icon: 'none' });
+					return;
+				}
+				uni.showToast({ title: '导出功能开发中', icon: 'none' });
+			},
+			getAvatarColor(name) {
+				const colors = ['#007AFF', '#5856D6', '#34C759', '#FF9500', '#FF3B30', '#AF52DE'];
+				const index = name.charCodeAt(0) % colors.length;
+				return colors[index];
+			},
+			toggleCheckin(participant: Participant) {
+				if (!this.isActivityValid) {
+					uni.showToast({ title: '活动不存在', icon: 'none' });
+					return;
+				}
+				// 获取当前活动的深拷贝，这里我们假设 activitiesState 是响应式的，直接修改可能会有副作用，所以最好是更新 store
+				// 但由于 UTS 的类型限制，我们这里直接操作 store 的数据结构会比较复杂，
+				// 所以我们通过 updateActivity 方法来更新，该方法接收一个 Activity 对象。
+				
+				// 注意：在 UTS 中，解构赋值对于复杂对象可能不会像 JS 那样深拷贝，
+				// 且 Participant 只是一个类型别名，不是 Activity。
+				// 这里我们需要修改的是 this.activity (它是一个计算属性，直接修改可能无效或不规范)，
+				// 但实际上我们应该构建一个新的 Activity 对象或者修改 store 中的对象。
+				
+				// 为了简化，我们直接基于 this.activity 构建要更新的数据。
+				// 这里的 this.activity 是从 store 中 find 出来的，直接修改它的属性（如果是对象引用）可能会反应到 store，
+				// 但为了触发视图更新和遵循单向数据流（虽然这里是 store 模式），我们应该调用 action。
+				
+				const currentActivity = this.activity;
+				if (currentActivity.id === 0) return; // 无效活动
+
+				// 查找签到记录索引
+				const recordIndex = currentActivity.checkinRecords.findIndex((r): boolean => r.name === participant.name);
+				
+				if (participant.checked) {
+					// 取消签到
+					if (recordIndex !== -1) {
+						currentActivity.checkinRecords.splice(recordIndex, 1);
+						uni.showToast({ title: `${participant.name} 已取消签到`, icon: 'none' });
+					}
+				} else {
+					// 签到
+					// 如果已经签到了（理论上前端状态已过滤，但为了安全再次检查）
+					if (recordIndex === -1) {
+						const now = new Date();
+						const timeStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+						
+						currentActivity.checkinRecords.push({
+							id: Date.now(),
+							name: participant.name,
+							phone: participant.phone,
+							time: timeStr
+						});
+						uni.showToast({ title: `${participant.name} 签到成功！`, icon: 'success' });
+					}
+				}
+				
+				// 更新统计数据
+				currentActivity.checkins = currentActivity.checkinRecords.length;
+				
+				// 提交更新到 Store
+				updateActivity(currentActivity);
+			},
+			goHome() {
+				uni.switchTab({
+					url: '/pages/activities/activities'
+				});
+			}
+		}
+	}
+</script>
+
+<style scoped>
+	.container {
+		flex: 1;
+		background-color: #F2F2F7;
+	}
+
+	.scroll-content {
+		flex: 1;
+		padding: 16px 16px calc(16px + env(safe-area-inset-bottom));
+	}
+
+	.invalid-state {
+		margin-bottom: 16px;
+	}
+
+	.invalid-content {
+		align-items: center;
+		padding: 28px 16px;
+	}
+
+	.invalid-title {
+		font-size: 17px;
+		font-weight: 600;
+		color: #000000;
+		margin-bottom: 8px;
+	}
+
+	.invalid-desc {
+		font-size: 14px;
+		color: #8E8E93;
+		margin-bottom: 16px;
+	}
+
+	.invalid-btn {
+		background-color: #007AFF;
+		padding: 10px 16px;
+		border-radius: 18px;
+	}
+
+	.invalid-btn-text {
+		color: #FFFFFF;
+		font-size: 14px;
+		font-weight: 600;
+	}
+
+	.stats-card {
+		background-color: #FFFFFF;
+		border-radius: 12px;
+		margin-bottom: 16px;
+	}
+
+	.card-header {
+		padding: 16px;
+		border-bottom: 0.5px solid #C6C6C8;
+	}
+
+	.card-header-title {
+		font-size: 16px;
+		font-weight: 600;
+	}
+
+	.header-action {
+		flex-direction: row;
+		align-items: center;
+		padding: 4px 8px;
+	}
+
+	.action-text {
+		color: #007AFF;
+		font-size: 14px;
+		font-weight: 500;
+	}
+
+	.header-left {
+		flex-direction: row;
+		align-items: center;
+	}
+
+	.stats-grid {
+		flex-direction: row;
+		flex-wrap: wrap;
+	}
+
+	.stat-item {
+		width: 25%;
+		align-items: center;
+		justify-content: center;
+		padding: 8px 0;
+	}
+
+	.stat-value {
+		font-size: 18px;
+		font-weight: 700;
+		color: #000000;
+		margin-bottom: 4px;
+	}
+
+	.success-text { color: #34C759; }
+	.warning-text { color: #FF9500; }
+
+	.stat-label {
+		font-size: 12px;
+		color: #8E8E93;
+	}
+
+	.participants-section {
+		background-color: #FFFFFF;
+		border-radius: 12px;
+		overflow: hidden;
+		margin-bottom: 24px;
+	}
+
+	.section-count {
+		font-size: 12px;
+		color: #8E8E93;
+		margin-left: 8px;
+	}
+
+	.controls {
+		padding: 16px;
+		border-bottom: 0.5px solid #C6C6C8;
+	}
+
+	.search-box {
+		flex-direction: row;
+		align-items: center;
+		background-color: #F2F2F7;
+		border-radius: 8px;
+		padding: 8px 12px;
+		margin-bottom: 12px;
+	}
+
+	.search-icon {
+		margin-right: 8px;
+		font-size: 14px;
+		line-height: 1;
+	}
+
+	.search-input {
+		flex: 1;
+		font-size: 14px;
+	}
+
+	.filter-buttons {
+		flex-direction: row;
+		justify-content: space-between;
+	}
+
+	.filter-btn {
+		flex: 1;
+		padding: 6px 0;
+		border-radius: 12px;
+		background-color: #F2F2F7;
+		margin: 0 4px;
+		align-items: center;
+		border: 0.5px solid #C6C6C8;
+	}
+
+	.filter-btn.active {
+		background-color: #007AFF;
+		border-color: #007AFF;
+	}
+
+	.filter-text {
+		font-size: 12px;
+		color: #8E8E93;
+	}
+
+	.active-text {
+		color: #FFFFFF;
+	}
+
+	.participants-list {
+		min-height: 200px;
+	}
+
+	.participant-item {
+		flex-direction: row;
+		align-items: center;
+		padding: 12px 16px;
+		border-bottom: 0.5px solid #F2F2F7;
+	}
+
+	.avatar {
+		width: 40px;
+		height: 40px;
+		border-radius: 20px;
+		justify-content: center;
+		align-items: center;
+		margin-right: 12px;
+	}
+
+	.avatar-text {
+		color: #FFFFFF;
+		font-size: 16px;
+		font-weight: 600;
+	}
+
+	.info {
+		flex: 1;
+	}
+
+	.name {
+		font-size: 16px;
+		font-weight: 600;
+		color: #000000;
+		margin-bottom: 2px;
+	}
+
+	.phone {
+		font-size: 12px;
+		color: #8E8E93;
+	}
+
+	.status-action {
+		align-items: center;
+		width: 60px;
+	}
+
+	.status-icon {
+		width: 24px;
+		height: 24px;
+		border-radius: 12px;
+		justify-content: center;
+		align-items: center;
+		margin-bottom: 4px;
+	}
+
+	.status-icon-text {
+		color: #FFFFFF;
+		font-size: 14px;
+		font-weight: 700;
+	}
+
+	.status-checked { background-color: #34C759; }
+	.status-unchecked { background-color: #C7C7CC; }
+
+	.status-time {
+		font-size: 10px;
+		color: #8E8E93;
+	}
+
+	.empty-list {
+		padding: 40px 0;
+		align-items: center;
+	}
+
+	.empty-text {
+		color: #8E8E93;
+		font-size: 14px;
+	}
+</style>

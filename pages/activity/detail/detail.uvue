@@ -1,0 +1,517 @@
+
+<template>
+	<view class="container">
+		<scroll-view class="scroll-content" scroll-y="true">
+			<view v-if="!isActivityValid" class="invalid-state card">
+				<view class="card-content invalid-content">
+					<text class="invalid-title">活动不存在或已删除</text>
+					<text class="invalid-desc">请返回首页查看其他活动</text>
+					<view class="invalid-btn" @click="goHome" hover-class="hover-opacity">
+						<text class="invalid-btn-text">返回首页</text>
+					</view>
+				</view>
+			</view>
+			<view v-else>
+			<!-- 活动统计 -->
+			<view class="stats-card card">
+				<view class="card-header">
+					<text class="card-header-title">活动统计</text>
+				</view>
+				<view class="card-content">
+					<view class="stats-grid">
+						<view class="stat-item">
+							<text class="stat-value">{{ activity.views }}</text>
+							<text class="stat-label">浏览量</text>
+						</view>
+						<view class="stat-item">
+							<text class="stat-value">{{ activity.participants }}</text>
+							<text class="stat-label">报名人数</text>
+						</view>
+						<view class="stat-item">
+							<text class="stat-value">{{ activity.checkins }}</text>
+							<text class="stat-label">签到人数</text>
+						</view>
+						<view class="stat-item">
+							<text class="stat-value">{{ checkinRate }}%</text>
+							<text class="stat-label">签到率</text>
+						</view>
+					</view>
+				</view>
+			</view>
+
+			<!-- 活动详情卡片 (支持折叠) -->
+			<view class="activity-info-card">
+				<view class="info-header" @click="showDetail = !showDetail">
+					<text class="info-title">活动详情</text>
+					<view class="detail-toggle">
+						<text class="toggle-icon">ℹ️</text>
+						<text class="toggle-text">{{ showDetail ? '收起' : '详情' }}</text>
+					</view>
+				</view>
+				<view class="info-meta">
+					<view class="info-item">
+						<text class="info-icon">📅</text>
+						<text class="info-text">{{ formattedDate }} {{ activity.time }}</text>
+					</view>
+					<view class="info-item">
+						<text class="info-icon">👥</text>
+						<text class="info-text">{{ activity.capacity > 0 ? `最多${activity.capacity}人` : '人数不限制' }}</text>
+					</view>
+				</view>
+				<view class="info-location">
+					<text class="info-icon">📍</text>
+					<text class="info-text">{{ activity.location || '地点待定' }}</text>
+				</view>
+			</view>
+
+			<!-- 展开的详情表单 -->
+			<view v-if="showDetail || isEditing" class="detail-form-section card animation-fade">
+				<view class="card-header">
+					<text class="card-header-title">详细信息</text>
+					<view class="header-actions">
+						<view class="header-action" @click="toggleEdit" hover-class="hover-opacity">
+							<text class="action-text">{{ isEditing ? '完成' : '编辑' }}</text>
+						</view>
+						<view v-if="!isEditing" class="close-btn" @click="showDetail = false" hover-class="hover-opacity">
+							<text class="close-icon">×</text>
+						</view>
+					</view>
+				</view>
+				<view class="card-content">
+					<view class="form-group">
+						<text class="label">活动名称</text>
+						<input class="form-input" v-model="form.name" :readonly="!isEditing" :class="{'editable': isEditing}" />
+					</view>
+					<view class="form-group row-group">
+						<view class="form-item half">
+							<text class="label">活动日期</text>
+							<input class="form-input" v-model="form.date" :readonly="!isEditing" :class="{'editable': isEditing}" />
+						</view>
+						<view class="form-item half">
+							<text class="label">活动时间</text>
+							<input class="form-input" v-model="form.time" :readonly="!isEditing" :class="{'editable': isEditing}" />
+						</view>
+					</view>
+					<view class="form-group">
+						<text class="label">活动地点</text>
+						<input class="form-input" v-model="form.location" :readonly="!isEditing" :class="{'editable': isEditing}" />
+					</view>
+					<view class="form-group">
+						<text class="label">最多参加人数</text>
+						<input class="form-input" type="number" v-model="form.capacity" :readonly="!isEditing" :class="{'editable': isEditing}" />
+					</view>
+					<view class="form-group">
+						<text class="label">活动介绍</text>
+						<textarea class="form-textarea" v-model="form.description" :readonly="!isEditing" :class="{'editable': isEditing}" />
+					</view>
+					<button v-if="isEditing" class="btn btn-primary" @click="saveChanges">
+						<text class="btn-text">保存修改</text>
+					</button>
+				</view>
+			</view>
+
+			<!-- 活动工具 -->
+			<view class="tools-card card">
+				<view class="card-header">
+					<text class="card-header-title">活动工具</text>
+				</view>
+				<view class="card-content">
+					<view class="tools-grid-compact">
+						<view class="tool-item-compact" @click="goToParticipants" hover-class="hover-opacity">
+							<view class="tool-icon-compact blue-bg">
+								<text class="tool-icon">👤</text>
+							</view>
+							<text class="tool-label-compact">报名情况</text>
+						</view>
+						<view class="tool-item-compact" @click="onShare" hover-class="hover-opacity">
+							<view class="tool-icon-compact orange-bg">
+								<text class="tool-icon">📤</text>
+							</view>
+							<text class="tool-label-compact">分享</text>
+						</view>
+					</view>
+				</view>
+			</view>
+			</view>
+		</scroll-view>
+	</view>
+</template>
+
+<script>
+	import { activitiesState, updateActivity, Activity } from '@/store/index.uts'
+
+	export default {
+		data() {
+			return {
+				activityId: 0,
+				showDetail: true,
+				isEditing: false,
+				form: {
+					name: '',
+					date: '',
+					time: '',
+					location: '',
+					capacity: 0,
+					description: ''
+				}
+			}
+		},
+		onLoad(options) {
+			const id = options['id'];
+			if (id != null) {
+				this.activityId = parseInt(id as string);
+			}
+			this.initForm();
+		},
+		computed: {
+			activity(): Activity {
+				const found = activitiesState.activities.find((a: Activity): boolean => a.id === this.activityId);
+				if (found != null) {
+					return found;
+				}
+				return {
+					id: 0,
+					name: '',
+					type: '',
+					date: '',
+					time: '',
+					location: '',
+					description: '',
+					capacity: 0,
+					participants: 0,
+					checkins: 0,
+					views: 0,
+					status: '',
+					checkinRecords: [],
+					createdAt: ''
+				} as Activity;
+			},
+			isActivityValid(): boolean {
+				return this.activity.id !== 0;
+			},
+			formattedDate() {
+				if (!this.activity.date) return '';
+				const date = new Date(this.activity.date);
+				return `${date.getMonth() + 1}月${date.getDate()}日`;
+			},
+			checkinRate() {
+				if (!this.activity.participants) return 0;
+				return Math.round((this.activity.checkins / this.activity.participants) * 100);
+			}
+		},
+		methods: {
+			initForm() {
+				if (this.activity) {
+					this.form = {
+						name: this.activity.name,
+						date: this.activity.date,
+						time: this.activity.time,
+						location: this.activity.location,
+						capacity: this.activity.capacity,
+						description: this.activity.description
+					};
+				}
+			},
+			goBack() {
+				uni.navigateBack();
+			},
+			toggleEdit() {
+				if (this.isEditing) {
+					this.saveChanges();
+				} else {
+					this.isEditing = true;
+					this.showDetail = true;
+				}
+			},
+			saveChanges() {
+				if (!this.isActivityValid) {
+					uni.showToast({ title: '活动状态异常', icon: 'none' });
+					return;
+				}
+				const updatedActivity = {
+					...this.activity,
+					...this.form,
+					capacity: this.form.capacity
+				} as Activity;
+				updateActivity(updatedActivity);
+				this.isEditing = false;
+				uni.showToast({ title: '保存成功' });
+			},
+			goToParticipants() {
+				if (!this.isActivityValid) {
+					uni.showToast({ title: '活动不存在', icon: 'none' });
+					return;
+				}
+				uni.navigateTo({
+					url: `/pages/activity/participants/participants?id=${this.activityId}`
+				});
+			},
+			onShare() {
+				if (!this.isActivityValid) {
+					uni.showToast({ title: '活动不存在', icon: 'none' });
+					return;
+				}
+				uni.navigateTo({
+					url: `/pages/activity/share/share?id=${this.activityId}`
+				});
+			},
+			goHome() {
+				uni.switchTab({
+					url: '/pages/activities/activities'
+				});
+			}
+		}
+	}
+</script>
+
+<style scoped>
+	.container {
+		flex: 1;
+		background-color: #F2F2F7;
+	}
+
+
+
+	.scroll-content {
+		flex: 1;
+		padding: 16px 16px calc(16px + env(safe-area-inset-bottom));
+	}
+
+	.invalid-state {
+		margin-bottom: 16px;
+	}
+
+	.invalid-content {
+		align-items: center;
+		padding: 28px 16px;
+	}
+
+	.invalid-title {
+		font-size: 17px;
+		font-weight: 600;
+		color: #000000;
+		margin-bottom: 8px;
+	}
+
+	.invalid-desc {
+		font-size: 14px;
+		color: #8E8E93;
+		margin-bottom: 16px;
+	}
+
+	.invalid-btn {
+		background-color: #007AFF;
+		padding: 10px 16px;
+		border-radius: 18px;
+	}
+
+	.invalid-btn-text {
+		color: #FFFFFF;
+		font-size: 14px;
+		font-weight: 600;
+	}
+
+	.stats-grid {
+		flex-direction: row;
+		flex-wrap: wrap;
+	}
+
+	.stat-item {
+		width: 25%;
+		align-items: center;
+		justify-content: center;
+		padding: 8px 0;
+	}
+
+	.stat-value {
+		font-size: 18px;
+		font-weight: 700;
+		color: #007AFF;
+		margin-bottom: 4px;
+	}
+
+	.stat-label {
+		font-size: 12px;
+		color: #8E8E93;
+	}
+
+	.header-action {
+		flex-direction: row;
+		align-items: center;
+		padding: 4px 8px;
+	}
+
+	.header-actions {
+		flex-direction: row;
+		align-items: center;
+	}
+
+	.action-text {
+		color: #007AFF;
+		font-size: 14px;
+		font-weight: 500;
+	}
+
+	.activity-info-card {
+		background-color: #FFFFFF;
+		border-radius: 12px;
+		padding: 16px;
+		margin-bottom: 16px;
+		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+	}
+
+	.info-header {
+		flex-direction: row;
+		justify-content: space-between;
+		align-items: center;
+		margin-bottom: 12px;
+	}
+
+	.info-title {
+		font-size: 18px;
+		font-weight: 700;
+		color: #000000;
+	}
+
+	.detail-toggle {
+		flex-direction: row;
+		align-items: center;
+		background-color: #F2F2F7;
+		padding: 4px 8px;
+		border-radius: 6px;
+	}
+
+	.toggle-icon {
+		font-size: 14px;
+		margin-right: 4px;
+		line-height: 1;
+	}
+
+	.toggle-text {
+		font-size: 12px;
+		color: #007AFF;
+	}
+
+	.info-meta {
+		flex-direction: row;
+		margin-bottom: 8px;
+	}
+
+	.info-item {
+		flex-direction: row;
+		align-items: center;
+		margin-right: 16px;
+	}
+
+	.info-icon {
+		font-size: 14px;
+		margin-right: 4px;
+		line-height: 1;
+	}
+
+	.info-text {
+		font-size: 14px;
+		color: #8E8E93;
+	}
+
+	.info-location {
+		flex-direction: row;
+		align-items: center;
+	}
+
+	.detail-form-section {
+		margin-bottom: 16px;
+	}
+
+	.close-btn {
+		padding: 4px;
+	}
+
+	.close-icon {
+		font-size: 20px;
+		color: #C7C7CC;
+		line-height: 1;
+	}
+
+	.form-group {
+		margin-bottom: 16px;
+	}
+
+	.row-group {
+		flex-direction: row;
+		justify-content: space-between;
+	}
+
+	.half {
+		width: 48%;
+	}
+
+	.label {
+		font-size: 14px;
+		color: #8E8E93;
+		margin-bottom: 8px;
+	}
+
+	.form-input {
+		height: 40px;
+		border: 1px solid #C6C6C8;
+		border-radius: 8px;
+		padding: 0 12px;
+		font-size: 16px;
+	}
+
+	.editable {
+		border-color: #007AFF;
+		background-color: #F2F2F7;
+	}
+
+	.form-textarea {
+		height: 100px;
+		border: 1px solid #C6C6C8;
+		border-radius: 8px;
+		padding: 12px;
+		font-size: 16px;
+		width: 100%;
+	}
+
+	.tools-grid-compact {
+		flex-direction: row;
+		flex-wrap: wrap;
+	}
+
+	.tool-item-compact {
+		width: 25%;
+		align-items: center;
+		padding: 12px 0;
+	}
+
+	.tool-icon-compact {
+		width: 44px;
+		height: 44px;
+		border-radius: 12px;
+		justify-content: center;
+		align-items: center;
+		margin-bottom: 8px;
+	}
+
+	.blue-bg { background-color: rgba(0, 122, 255, 0.1); }
+	.orange-bg { background-color: rgba(255, 149, 0, 0.1); }
+
+	.tool-icon {
+		font-size: 20px;
+	}
+
+	.tool-label-compact {
+		font-size: 12px;
+		color: #000000;
+	}
+
+	.animation-fade {
+		animation: fadeIn 0.3s ease;
+	}
+
+	@keyframes fadeIn {
+		from { opacity: 0; transform: translateY(-10px); }
+		to { opacity: 1; transform: translateY(0); }
+	}
+</style>

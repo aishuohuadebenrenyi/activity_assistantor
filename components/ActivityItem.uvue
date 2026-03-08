@@ -1,0 +1,160 @@
+
+<template>
+	<view class="activity-item" @click="onClick" hover-class="hover-opacity">
+		<view class="activity-info">
+			<view class="activity-title">
+				<text class="title-text">{{ activity.name }}</text>
+				<text v-if="activity.isTemp" class="type-tag">临时</text>
+			</view>
+			<view class="activity-meta">
+				<text class="meta-text">{{ formattedDate }} {{ activity.time }}</text>
+				<text class="meta-separator">•</text>
+				<text class="meta-text">{{ activity.location || '地点待定' }}</text>
+				<text class="meta-separator">•</text>
+				<text class="meta-text">{{ activity.participants }}人</text>
+			</view>
+		</view>
+		<view class="activity-actions">
+			<view :class="['status-badge', statusClass]">
+				<text class="status-text">{{ statusText }}</text>
+			</view>
+			<view class="share-btn" @click.stop="onShare">
+				<text class="share-icon">📤</text>
+			</view>
+		</view>
+	</view>
+</template>
+
+<script>
+	export default {
+		props: {
+			activity: {
+				type: Object,
+				required: true
+			}
+		},
+		computed: {
+			formattedDate() {
+				const date = new Date(this.activity.date);
+				return `${date.getMonth() + 1}月${date.getDate()}日`;
+			},
+			statusText() {
+				if (this.activity.status === 'upcoming') return '未开始';
+				if (this.activity.status === 'ongoing') return '进行中';
+				return '已结束';
+			},
+			statusClass() {
+				if (this.activity.status === 'upcoming') return 'status-upcoming';
+				if (this.activity.status === 'ongoing') return 'status-ongoing';
+				return 'status-ended';
+			}
+		},
+		methods: {
+			onClick() {
+				this.$emit('click', this.activity.id);
+			},
+			onShare() {
+				this.$emit('share', this.activity.id);
+			}
+		}
+	}
+</script>
+
+<style scoped>
+	.activity-item {
+		padding: 16px;
+		border-bottom: 0.5px solid #C6C6C8;
+		flex-direction: row;
+		justify-content: space-between;
+		align-items: center;
+		background-color: #FFFFFF;
+	}
+
+	.activity-info {
+		flex: 1;
+		margin-right: 12px;
+	}
+
+	.activity-title {
+		flex-direction: row;
+		align-items: center;
+		margin-bottom: 4px;
+	}
+
+	.title-text {
+		font-size: 16px;
+		font-weight: 600;
+		color: #000000;
+	}
+
+	.type-tag {
+		margin-left: 8px;
+		padding: 2px 6px;
+		background-color: rgba(52, 199, 89, 0.1);
+		color: #34C759;
+		border-radius: 8px;
+		font-size: 10px;
+		font-weight: 600;
+	}
+
+	.activity-meta {
+		flex-direction: row;
+		align-items: center;
+	}
+
+	.meta-text {
+		font-size: 12px;
+		color: #8E8E93;
+	}
+
+	.meta-separator {
+		font-size: 12px;
+		color: #8E8E93;
+		margin: 0 4px;
+	}
+
+	.activity-actions {
+		flex-direction: row;
+		align-items: center;
+	}
+
+	.status-badge {
+		padding: 4px 8px;
+		border-radius: 12px;
+		margin-right: 8px;
+	}
+
+	.status-text {
+		font-size: 11px;
+		font-weight: 500;
+	}
+
+	.status-upcoming {
+		background-color: rgba(0, 122, 255, 0.1);
+		color: #007AFF;
+	}
+
+	.status-ongoing {
+		background-color: rgba(52, 199, 89, 0.1);
+		color: #34C759;
+	}
+
+	.status-ended {
+		background-color: rgba(142, 142, 147, 0.1);
+		color: #8E8E93;
+	}
+
+	.share-btn {
+		width: 32px;
+		height: 32px;
+		border-radius: 16px;
+		background-color: #F2F2F7;
+		justify-content: center;
+		align-items: center;
+		border: 1px solid #C6C6C8;
+	}
+
+	.share-icon {
+		font-size: 14px;
+	}
+</style>

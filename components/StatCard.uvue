@@ -1,0 +1,81 @@
+
+<template>
+	<view class="stat-card">
+		<view class="stat-grid">
+			<view class="stat-item">
+				<text class="stat-value">{{ totalActivities }}</text>
+				<text class="stat-label">活动总数</text>
+			</view>
+			<view class="stat-item">
+				<text class="stat-value">{{ totalParticipants }}</text>
+				<text class="stat-label">累计参与人数</text>
+			</view>
+			<view class="stat-item">
+				<text class="stat-value">{{ totalCheckins }}</text>
+				<text class="stat-label">累计签到人数</text>
+			</view>
+			<view class="stat-item">
+				<text class="stat-value">{{ avgRate }}%</text>
+				<text class="stat-label">平均签到率</text>
+			</view>
+		</view>
+	</view>
+</template>
+
+<script>
+	export default {
+		props: {
+			totalActivities: {
+				type: Number,
+				default: 0
+			},
+			totalParticipants: {
+				type: Number,
+				default: 0
+			},
+			totalCheckins: {
+				type: Number,
+				default: 0
+			},
+			avgRate: {
+				type: Number,
+				default: 0
+			}
+		}
+	}
+</script>
+
+<style scoped>
+	.stat-card {
+		background-color: #FFFFFF;
+		border-radius: 12px;
+		margin-bottom: 16px;
+		padding: 16px;
+		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+	}
+
+	.stat-grid {
+		flex-direction: row;
+		flex-wrap: wrap;
+		justify-content: space-between;
+	}
+
+	.stat-item {
+		width: 50%;
+		padding: 8px 0;
+		align-items: center;
+		justify-content: center;
+	}
+
+	.stat-value {
+		font-size: 18px;
+		font-weight: 700;
+		color: #007AFF;
+		margin-bottom: 4px;
+	}
+
+	.stat-label {
+		font-size: 12px;
+		color: #8E8E93;
+	}
+</style>

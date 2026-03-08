@@ -1,0 +1,111 @@
+<template>
+	<view class="container">
+		<view class="logo-section">
+			<text class="logo-icon">📅</text>
+			<text class="app-name">活动帮手</text>
+			<text class="version">Version 1.0.0</text>
+		</view>
+
+		<view class="card">
+			<view class="card-item">
+				<text class="item-label">官方网站</text>
+				<text class="item-value">www.activityhelper.com</text>
+			</view>
+			<view class="card-item">
+				<text class="item-label">隐私政策</text>
+				<text class="arrow">➡️</text>
+			</view>
+			<view class="card-item">
+				<text class="item-label">服务协议</text>
+				<text class="arrow">➡️</text>
+			</view>
+		</view>
+
+		<view class="footer">
+			<text class="copyright">Copyright © 2024 活动帮手. All Rights Reserved.</text>
+		</view>
+	</view>
+</template>
+
+<script>
+	export default {
+		methods: {
+			// Add any necessary methods here
+		}
+	}
+</script>
+
+<style scoped>
+	.container {
+		flex: 1;
+		background-color: #F2F2F7;
+		padding: 16px;
+	}
+
+	.logo-section {
+		align-items: center;
+		padding: 40px 0;
+	}
+
+	.logo-icon {
+		font-size: 64px;
+		margin-bottom: 16px;
+	}
+
+	.app-name {
+		font-size: 24px;
+		font-weight: 700;
+		color: #000000;
+		margin-bottom: 8px;
+	}
+
+	.version {
+		font-size: 14px;
+		color: #8E8E93;
+	}
+
+	.card {
+		background-color: #FFFFFF;
+		border-radius: 12px;
+		padding: 0 16px;
+		margin-top: 24px;
+	}
+
+	.card-item {
+		height: 54px;
+		flex-direction: row;
+		align-items: center;
+		justify-content: space-between;
+		border-bottom: 0.5px solid #C6C6C8;
+	}
+
+	.card-item:last-child {
+		border-bottom: none;
+	}
+
+	.item-label {
+		font-size: 16px;
+		color: #000000;
+	}
+
+	.item-value {
+		font-size: 14px;
+		color: #8E8E93;
+	}
+
+	.arrow {
+		font-size: 14px;
+		color: #C7C7CC;
+	}
+
+	.footer {
+		margin-top: auto;
+		padding: 24px 0;
+		align-items: center;
+	}
+
+	.copyright {
+		font-size: 12px;
+		color: #C7C7CC;
+	}
+</style>

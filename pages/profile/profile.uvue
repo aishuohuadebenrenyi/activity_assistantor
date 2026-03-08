@@ -1,0 +1,466 @@
+<template>
+	<view class="container">
+		<scroll-view class="scroll-content" scroll-y="true">
+			<!-- 用户信息与统计整合卡片 -->
+			<view class="user-card card" @click="goToEdit" hover-class="hover-opacity">
+				<view class="card-content">
+					<!-- 用户头部信息 -->
+					<view class="user-header">
+						<view class="user-info-left">
+							<view class="avatar-large">
+								<text class="avatar-text">主</text>
+							</view>
+							<view class="user-details">
+								<text class="user-name">主办方用户</text>
+								<view class="user-badge">
+									<text class="badge-text">官方认证</text>
+								</view>
+								<text class="user-bio">致力于提供最好的活动管理服务。</text>
+							</view>
+						</view>
+						<view class="user-info-right">
+							<text class="arrow-icon">></text>
+						</view>
+					</view>
+					
+					<!-- 分割线 -->
+					<view class="divider"></view>
+					
+					<!-- 统计数据 -->
+					<view class="stats-grid">
+						<view class="stat-item">
+							<text class="stat-value">{{ totalActivities }}</text>
+							<text class="stat-label">总活动</text>
+						</view>
+						<view class="stat-item">
+							<text class="stat-value">{{ ongoingActivities }}</text>
+							<text class="stat-label">进行中</text>
+						</view>
+						<view class="stat-item">
+							<text class="stat-value">{{ totalParticipants }}</text>
+							<text class="stat-label">总参与</text>
+						</view>
+					</view>
+				</view>
+			</view>
+
+			<!-- 设置选项 -->
+			<view class="settings-card card">
+				<view class="card-header">
+					<text class="card-header-title">通用设置</text>
+				</view>
+				<view class="list-group">
+					<view class="list-item" @click="showThemeModal = true" hover-class="hover-opacity">
+						<view class="list-item-left">
+							<text class="list-icon">🌓</text>
+							<text class="list-label">显示主题</text>
+						</view>
+						<view class="list-item-right">
+							<text class="list-value">{{ themeLabel }}</text>
+							<text class="arrow">></text>
+						</view>
+					</view>
+					<view class="list-item" @click="showNotifyModal = true" hover-class="hover-opacity">
+						<view class="list-item-left">
+							<text class="list-icon">🔔</text>
+							<text class="list-label">通知设置</text>
+						</view>
+						<view class="list-item-right">
+							<text class="list-value">{{ notifyEnabled ? '已开启' : '已关闭' }}</text>
+							<text class="arrow">></text>
+						</view>
+					</view>
+				</view>
+			</view>
+
+			<!-- 帮助与支持 -->
+			<view class="settings-card card">
+				<view class="card-header">
+					<text class="card-header-title">帮助与支持</text>
+				</view>
+				<view class="list-group">
+					<view class="list-item" @click="onFeedback" hover-class="hover-opacity">
+						<view class="list-item-left">
+							<text class="list-icon">💬</text>
+							<text class="list-label">意见反馈</text>
+						</view>
+						<text class="arrow">></text>
+					</view>
+					<view class="list-item" @click="goToAbout" hover-class="hover-opacity">
+						<view class="list-item-left">
+							<text class="list-label">关于活动帮手</text>
+						</view>
+						<text class="arrow">></text>
+					</view>
+				</view>
+			</view>
+		</scroll-view>
+
+		<!-- 主题选择模态框 (模拟 tools-2.html) -->
+		<view v-if="showThemeModal" class="modal-overlay" @click="showThemeModal = false">
+			<view class="modal-content" @click.stop>
+				<view class="modal-header">
+					<text class="modal-title">选择主题</text>
+				</view>
+				<view class="modal-list">
+					<view 
+						v-for="t in themeOptions" 
+						:key="t.value" 
+						class="modal-item"
+						@click="setTheme(t.value)"
+						hover-class="hover-opacity"
+					>
+						<text :class="['modal-item-text', currentTheme === t.value ? 'active-text' : '']">{{ t.label }}</text>
+						<text v-if="currentTheme === t.value" class="check-icon">✓</text>
+					</view>
+				</view>
+				<view class="modal-footer" @click="showThemeModal = false">
+					<text class="modal-footer-text">取消</text>
+				</view>
+			</view>
+		</view>
+
+		<!-- 通知设置模态框 -->
+		<view v-if="showNotifyModal" class="modal-overlay" @click="showNotifyModal = false">
+			<view class="modal-content" @click.stop>
+				<view class="modal-header">
+					<text class="modal-title">通知设置</text>
+				</view>
+				<view class="modal-body">
+					<text class="modal-desc">开启通知后，您将收到活动报名和签到的实时提醒。</text>
+					<view class="switch-row">
+						<text class="switch-label">接收实时通知</text>
+						<switch :checked="notifyEnabled" @change="toggleNotify" color="#007AFF" />
+					</view>
+				</view>
+				<view class="modal-footer" @click="showNotifyModal = false">
+					<text class="modal-footer-text">完成</text>
+				</view>
+			</view>
+		</view>
+	</view>
+</template>
+
+<script>
+	import { activitiesState } from '@/store/index.uts'
+
+	export default {
+		data() {
+			return {
+				showThemeModal: false,
+				showNotifyModal: false,
+				currentTheme: 'light',
+				notifyEnabled: true,
+				themeOptions: [
+					{ label: '浅色模式', value: 'light' },
+					{ label: '深色模式', value: 'dark' },
+					{ label: '跟随系统', value: 'auto' }
+				]
+			}
+		},
+		computed: {
+			totalActivities() {
+				return activitiesState.activities.length;
+			},
+			ongoingActivities() {
+				return activitiesState.activities.filter(a => a.status === 'ongoing').length;
+			},
+			totalParticipants() {
+				return activitiesState.activities.reduce((sum, a) => sum + (a.participants || 0), 0);
+			},
+			themeLabel() {
+				const option = this.themeOptions.find(o => o.value === this.currentTheme);
+				return option ? option.label : '浅色模式';
+			}
+		},
+		methods: {
+			goToEdit() {
+				uni.navigateTo({ url: '/pages/profile/edit/edit' });
+			},
+			goToAbout() {
+				uni.navigateTo({ url: '/pages/about/about' });
+			},
+			onLogout() {
+				uni.showModal({
+					title: '退出登录',
+					content: '确定要退出当前账号吗？',
+					success: (res) => {
+						if (res.confirm) {
+							uni.reLaunch({ url: '/pages/auth/login' });
+						}
+					}
+				});
+			},
+			setTheme(theme) {
+				this.currentTheme = theme;
+				this.showThemeModal = false;
+				uni.showToast({ title: '主题设置成功', icon: 'none' });
+			},
+			toggleNotify(e) {
+				this.notifyEnabled = e.detail.value;
+			},
+			onFeedback() {
+				uni.showToast({ title: '感谢您的反馈！', icon: 'success' });
+			}
+		}
+	}
+</script>
+
+<style scoped>
+	.container {
+		flex: 1;
+		background-color: #F2F2F7;
+	}
+
+
+
+	.scroll-content {
+		flex: 1;
+		padding: 16px 16px calc(16px + env(safe-area-inset-bottom));
+	}
+
+	.user-header {
+		flex-direction: row;
+		justify-content: space-between;
+		align-items: center;
+		padding: 20px;
+	}
+
+	.user-info-left {
+		flex-direction: row;
+		align-items: center;
+		flex: 1;
+	}
+
+	.user-info-right {
+		padding-left: 10px;
+	}
+
+	.arrow-icon {
+		color: #C7C7CC;
+		font-size: 18px;
+		font-weight: 600;
+	}
+
+	.divider {
+		height: 0.5px;
+		background-color: #F2F2F7;
+		margin: 0 16px;
+	}
+
+	.avatar-large {
+		width: 70px;
+		height: 70px;
+		border-radius: 35px;
+		background-color: #007AFF;
+		justify-content: center;
+		align-items: center;
+		margin-right: 16px;
+	}
+
+	.avatar-text {
+		color: #FFFFFF;
+		font-size: 28px;
+		font-weight: 600;
+	}
+
+	.user-details {
+		flex: 1;
+	}
+
+	.user-name {
+		font-size: 20px;
+		font-weight: 700;
+		color: #000000;
+		margin-bottom: 4px;
+	}
+
+	.user-badge {
+		background-color: rgba(0, 122, 255, 0.1);
+		padding: 2px 8px;
+		border-radius: 4px;
+		align-self: flex-start;
+		margin-bottom: 8px;
+	}
+
+	.badge-text {
+		color: #007AFF;
+		font-size: 11px;
+		font-weight: 600;
+	}
+
+	.user-bio {
+		font-size: 13px;
+		color: #8E8E93;
+	}
+
+	.stats-grid {
+		flex-direction: row;
+		padding: 16px;
+	}
+
+	.stat-item {
+		flex: 1;
+		align-items: center;
+		padding: 8px 0;
+	}
+
+	.stat-value {
+		font-size: 18px;
+		font-weight: 700;
+		color: #000000;
+		margin-bottom: 2px;
+	}
+
+	.stat-label {
+		font-size: 12px;
+		color: #8E8E93;
+	}
+
+	.list-group {
+		padding: 0 16px;
+	}
+
+	.list-item {
+		height: 54px;
+		flex-direction: row;
+		align-items: center;
+		justify-content: space-between;
+		border-bottom: 0.5px solid #F2F2F7;
+	}
+
+	.list-item:last-child {
+		border-bottom: none;
+	}
+
+	.list-item-left {
+		flex-direction: row;
+		align-items: center;
+	}
+
+	.list-icon {
+		font-size: 18px;
+		margin-right: 12px;
+	}
+
+	.list-label {
+		font-size: 16px;
+		color: #000000;
+	}
+
+	.list-item-right {
+		flex-direction: row;
+		align-items: center;
+	}
+
+	.list-value {
+		font-size: 14px;
+		color: #8E8E93;
+		margin-right: 8px;
+	}
+
+	.arrow {
+		font-size: 16px;
+		color: #C7C7CC;
+	}
+
+	/* 模态框样式 */
+	.modal-overlay {
+		position: fixed;
+		top: 0;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		background-color: rgba(0, 0, 0, 0.4);
+		justify-content: flex-end;
+		z-index: 1000;
+	}
+
+	.modal-content {
+		background-color: #FFFFFF;
+		border-top-left-radius: 20px;
+		border-top-right-radius: 20px;
+		padding-bottom: 34px; /* 安全距离 */
+		animation: slideUp 0.3s ease;
+	}
+
+	@keyframes slideUp {
+		from { transform: translateY(100%); }
+		to { transform: translateY(0); }
+	}
+
+	.modal-header {
+		height: 54px;
+		justify-content: center;
+		align-items: center;
+		border-bottom: 0.5px solid #C6C6C8;
+	}
+
+	.modal-title {
+		font-size: 17px;
+		font-weight: 700;
+	}
+
+	.modal-list {
+		padding: 0 16px;
+	}
+
+	.modal-item {
+		height: 54px;
+		flex-direction: row;
+		align-items: center;
+		justify-content: space-between;
+		border-bottom: 0.5px solid #F2F2F7;
+	}
+
+	.modal-item-text {
+		font-size: 16px;
+		color: #000000;
+	}
+
+	.active-text {
+		color: #007AFF;
+		font-weight: 600;
+	}
+
+	.check-icon {
+		color: #007AFF;
+		font-size: 16px;
+	}
+
+	.modal-footer {
+		height: 54px;
+		justify-content: center;
+		align-items: center;
+	}
+
+	.modal-footer-text {
+		font-size: 17px;
+		color: #007AFF;
+	}
+
+	.modal-body {
+		padding: 20px 16px;
+	}
+
+	.modal-desc {
+		font-size: 14px;
+		color: #8E8E93;
+		margin-bottom: 20px;
+		line-height: 1.4;
+	}
+
+	.switch-row {
+		flex-direction: row;
+		justify-content: space-between;
+		align-items: center;
+		height: 54px;
+		border-top: 0.5px solid #F2F2F7;
+		border-bottom: 0.5px solid #F2F2F7;
+	}
+
+	.switch-label {
+		font-size: 16px;
+		color: #000000;
+	}
+</style>

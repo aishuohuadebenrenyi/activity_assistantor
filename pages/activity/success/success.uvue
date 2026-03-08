@@ -1,0 +1,367 @@
+
+<template>
+	<view class="container">
+		<scroll-view class="scroll-content" scroll-y="true">
+			<view v-if="!isActivityValid" class="invalid-state card">
+				<view class="card-content invalid-content">
+					<text class="invalid-title">活动不存在或已删除</text>
+					<text class="invalid-desc">请返回首页查看当前活动列表</text>
+					<view class="invalid-btn" @click="goHome" hover-class="hover-opacity">
+						<text class="invalid-btn-text">返回首页</text>
+					</view>
+				</view>
+			</view>
+			<view v-else>
+			<!-- 成功状态 -->
+			<view class="status-section">
+				<view class="success-icon-bg">
+					<text class="success-icon">✓</text>
+				</view>
+				<text class="status-title">活动创建成功</text>
+				<text class="status-desc">您的活动已发布，快去分享给小伙伴吧！</text>
+			</view>
+
+			<!-- 活动预览卡片 -->
+			<view class="activity-card card">
+				<view class="card-header">
+					<text class="card-header-title">活动预览</text>
+				</view>
+				<view class="card-content">
+					<text class="activity-name">{{ activity.name }}</text>
+					<view class="info-row">
+						<text class="info-icon">📅</text>
+						<text class="info-text">{{ activity.date }} {{ activity.time }}</text>
+					</view>
+					<view class="info-row">
+						<text class="info-icon">📍</text>
+						<text class="info-text">{{ activity.location || '地点待定' }}</text>
+					</view>
+				</view>
+			</view>
+
+			<!-- 分享二维码 -->
+			<view class="share-section card">
+				<view class="card-header">
+					<text class="card-header-title">报名二维码</text>
+				</view>
+				<view class="card-content qr-container">
+					<view class="qr-code">
+						<!-- 模拟二维码 -->
+						<view class="qr-pixel-grid">
+							<view v-for="i in 25" :key="i" :class="['qr-pixel', i % 3 === 0 ? 'black' : '']"></view>
+						</view>
+						<text class="qr-scan-tips">扫码即可快速报名</text>
+					</view>
+					
+					<view class="share-link-box">
+						<text class="link-label">分享链接</text>
+						<view class="link-row">
+							<text class="link-text">https://act.helper/{{ activity.id }}</text>
+							<view class="copy-btn" @click="copyLink" hover-class="hover-opacity">
+								<text class="copy-btn-text">复制</text>
+							</view>
+						</view>
+					</view>
+				</view>
+			</view>
+
+			<!-- 操作按钮 -->
+			<view class="footer-actions">
+				<button class="btn btn-primary" @click="goToDetail" hover-class="hover-opacity">
+					<text class="btn-text">查看详情</text>
+				</button>
+				<button class="btn btn-outline" @click="goHome" hover-class="hover-opacity">
+					<text class="btn-text outline-text">返回首页</text>
+				</button>
+			</view>
+			</view>
+		</scroll-view>
+	</view>
+</template>
+
+<script>
+	import { activitiesState, Activity } from '@/store/index.uts'
+
+	export default {
+		data() {
+			return {
+				activityId: 0
+			}
+		},
+		onLoad(options) {
+			const id = options['id'];
+			if (id != null) {
+				this.activityId = parseInt(id as string);
+			}
+		},
+		computed: {
+			activity(): Activity {
+				const found = activitiesState.activities.find((a: Activity): boolean => a.id === this.activityId);
+				if (found != null) {
+					return found;
+				}
+				return {
+					id: 0,
+					name: '',
+					type: '',
+					date: '',
+					time: '',
+					location: '',
+					description: '',
+					capacity: 0,
+					participants: 0,
+					checkins: 0,
+					views: 0,
+					status: '',
+					checkinRecords: [],
+					createdAt: ''
+				} as Activity;
+			},
+			isActivityValid(): boolean {
+				return this.activity.id !== 0;
+			}
+		},
+		methods: {
+			goToDetail() {
+				if (!this.isActivityValid) {
+					uni.showToast({ title: '活动不存在', icon: 'none' });
+					return;
+				}
+				uni.redirectTo({
+					url: `/pages/activity/detail/detail?id=${this.activityId}`
+				});
+			},
+			goHome() {
+				uni.switchTab({
+					url: '/pages/activities/activities'
+				});
+			},
+			copyLink() {
+				if (!this.isActivityValid) {
+					uni.showToast({ title: '活动不存在', icon: 'none' });
+					return;
+				}
+				uni.setClipboardData({
+					data: `https://act.helper/${this.activityId}`,
+					success: () => {
+						uni.showToast({ title: '链接已复制' });
+					},
+					fail: () => {
+						uni.showToast({ title: '复制失败，请重试', icon: 'none' });
+					}
+				});
+			}
+		}
+	}
+</script>
+
+<style scoped>
+	.container {
+		flex: 1;
+		background-color: #F2F2F7;
+	}
+
+	.scroll-content {
+		flex: 1;
+		padding: 24px 16px calc(16px + env(safe-area-inset-bottom));
+	}
+
+	.invalid-state {
+		margin-bottom: 16px;
+	}
+
+	.invalid-content {
+		align-items: center;
+		padding: 28px 16px;
+	}
+
+	.invalid-title {
+		font-size: 17px;
+		font-weight: 600;
+		color: #000000;
+		margin-bottom: 8px;
+	}
+
+	.invalid-desc {
+		font-size: 14px;
+		color: #8E8E93;
+		margin-bottom: 16px;
+	}
+
+	.invalid-btn {
+		background-color: #007AFF;
+		padding: 10px 16px;
+		border-radius: 18px;
+	}
+
+	.invalid-btn-text {
+		color: #FFFFFF;
+		font-size: 14px;
+		font-weight: 600;
+	}
+
+	.status-section {
+		align-items: center;
+		margin-bottom: 32px;
+	}
+
+	.success-icon-bg {
+		width: 80px;
+		height: 80px;
+		border-radius: 40px;
+		background-color: #34C759;
+		justify-content: center;
+		align-items: center;
+		margin-bottom: 16px;
+		box-shadow: 0 4px 12px rgba(52, 199, 89, 0.3);
+	}
+
+	.success-icon {
+		color: #FFFFFF;
+		font-size: 40px;
+		font-weight: 700;
+	}
+
+	.status-title {
+		font-size: 24px;
+		font-weight: 700;
+		color: #000000;
+		margin-bottom: 8px;
+	}
+
+	.status-desc {
+		font-size: 14px;
+		color: #8E8E93;
+		text-align: center;
+	}
+
+	.activity-name {
+		font-size: 18px;
+		font-weight: 700;
+		color: #000000;
+		margin-bottom: 12px;
+	}
+
+	.info-row {
+		flex-direction: row;
+		align-items: center;
+		margin-bottom: 6px;
+	}
+
+	.info-icon {
+		margin-right: 8px;
+		font-size: 14px;
+	}
+
+	.info-text {
+		font-size: 14px;
+		color: #8E8E93;
+	}
+
+	.qr-container {
+		align-items: center;
+		padding: 24px 16px;
+	}
+
+	.qr-code {
+		width: 180px;
+		padding: 16px;
+		background-color: #F2F2F7;
+		border-radius: 12px;
+		align-items: center;
+		margin-bottom: 24px;
+	}
+
+	.qr-pixel-grid {
+		width: 120px;
+		height: 120px;
+		flex-direction: row;
+		flex-wrap: wrap;
+		margin-bottom: 12px;
+	}
+
+	.qr-pixel {
+		width: 24px;
+		height: 24px;
+		background-color: #FFFFFF;
+	}
+
+	.black {
+		background-color: #000000;
+	}
+
+	.qr-scan-tips {
+		font-size: 12px;
+		color: #8E8E93;
+	}
+
+	.share-link-box {
+		width: 100%;
+		background-color: #F2F2F7;
+		padding: 12px;
+		border-radius: 8px;
+	}
+
+	.link-label {
+		font-size: 12px;
+		color: #8E8E93;
+		margin-bottom: 6px;
+	}
+
+	.link-row {
+		flex-direction: row;
+		align-items: center;
+		justify-content: space-between;
+	}
+
+	.link-text {
+		font-size: 14px;
+		color: #007AFF;
+		flex: 1;
+		margin-right: 12px;
+	}
+
+	.copy-btn {
+		background-color: #007AFF;
+		padding: 4px 12px;
+		border-radius: 4px;
+	}
+
+	.copy-btn-text {
+		color: #FFFFFF;
+		font-size: 12px;
+		font-weight: 600;
+	}
+
+	.footer-actions {
+		margin-top: 16px;
+		margin-bottom: 40px;
+	}
+
+	.btn {
+		height: 50px;
+		border-radius: 12px;
+		justify-content: center;
+		align-items: center;
+		margin-bottom: 12px;
+	}
+
+	.btn-primary {
+		background-color: #007AFF;
+	}
+
+	.btn-outline {
+		background-color: transparent;
+		border: 1px solid #007AFF;
+	}
+
+	.btn-text {
+		color: #FFFFFF;
+		font-size: 17px;
+		font-weight: 600;
+	}
+
+	.outline-text {
+		color: #007AFF;
+	}
+</style>
