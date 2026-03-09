@@ -183,6 +183,7 @@
 					views: 0,
 					status: '',
 					checkinRecords: [],
+					registrations: [],
 					createdAt: ''
 				} as Activity;
 			},

@@ -1,0 +1,44 @@
+import { config } from './config.uts'
+
+export class RequestOptions {
+  url: string
+  method: string
+  data: any | null
+  header: any | null
+  
+  constructor(url: string, method: string = 'GET', data: any | null = null, header: any | null = null) {
+    this.url = url
+    this.method = method
+    this.data = data
+    this.header = header
+  }
+}
+
+export const request = <T>(options: RequestOptions): Promise<T> => {
+  return new Promise<T>((resolve, reject) => {
+    const fullUrl = config.BASE_URL + options.url
+    
+    uni.request({
+      url: fullUrl,
+      method: options.method as any,
+      data: options.data,
+      header: options.header ?? {
+        'Content-Type': 'application/json'
+      },
+      timeout: config.TIMEOUT,
+      success: (res) => {
+        if (res.statusCode >= 200 && res.statusCode < 300) {
+          // 尝试转换数据类型
+          resolve(res.data as T)
+        } else {
+          console.error(`Request failed: ${res.statusCode} ${JSON.stringify(res.data)}`)
+          reject(new Error(`Request failed with status ${res.statusCode}`))
+        }
+      },
+      fail: (err) => {
+        console.error(`Request error: ${JSON.stringify(err)}`)
+        reject(err)
+      }
+    })
+  })
+}

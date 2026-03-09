@@ -120,7 +120,7 @@
 			onTimeChange(e) {
 				this.form.time = e.detail.value;
 			},
-			submitForm() {
+			async submitForm() {
 				if (this.isSubmitting) return;
 				if (!this.form.name || !this.form.date || !this.form.time) {
 					uni.showToast({ title: '请完善活动信息', icon: 'none' });
@@ -141,15 +141,20 @@
 					description: this.form.description,
 					views: 0,
 					checkinRecords: [],
+					registrations: [],
 					type: this.form.theme,
 					createdAt: new Date().toISOString()
 				} as Activity;
 
-				addActivity(newActivity);
-				
-				uni.redirectTo({
-					url: `/pages/activity/success/success?id=${newActivity.id}`
-				});
+				try {
+					const created = await addActivity(newActivity);
+					uni.redirectTo({
+						url: `/pages/activity/success/success?id=${created.id}`
+					});
+				} catch (e) {
+					uni.showToast({ title: '创建失败，请重试', icon: 'none' });
+					this.isSubmitting = false;
+				}
 			}
 		}
 	}

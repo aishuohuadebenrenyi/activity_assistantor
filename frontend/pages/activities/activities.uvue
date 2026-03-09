@@ -81,7 +81,7 @@
 <script>
 	import StatCard from '@/components/StatCard.uvue'
 	import ActivityItem from '@/components/ActivityItem.uvue'
-	import { activitiesState } from '@/store/index.uts'
+	import { activitiesState, fetchActivities } from '@/store/index.uts'
 
 	export default {
 		components: {
@@ -160,6 +160,7 @@
 			}
 		},
 		onShow() {
+			fetchActivities();
 			this.lastScrollTop = 0;
 			this.tabBarVisible = true;
 			uni.showTabBar({ animation: false });

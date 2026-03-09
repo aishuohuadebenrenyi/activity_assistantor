@@ -1,9 +1,29 @@
-unpackage/
-.hbuilderx/
+# Frontend
+frontend/unpackage/
+frontend/.hbuilderx/
+frontend/node_modules/
+frontend/dist/
+frontend/build/
+
+# Backend
+backend/venv/
+backend/__pycache__/
+backend/*.pyc
+backend/instance/
+backend/.pytest_cache/
+backend/.coverage
+backend/htmlcov/
+backend/app.db
+backend/.env
+
+# Root
+venv/
+__pycache__/
+instance/
+.env
+
+# General
 .DS_Store
-node_modules/
-dist/
-build/
 *.log
 .idea/
 .vscode/

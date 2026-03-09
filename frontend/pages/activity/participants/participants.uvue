@@ -152,6 +152,7 @@
 					views: 0,
 					status: '',
 					checkinRecords: [],
+					registrations: [],
 					createdAt: ''
 				} as Activity;
 			},
@@ -171,29 +172,37 @@
 				if (this.totalCount === 0) return 0;
 				return Math.round((this.checkedCount / this.totalCount) * 100);
 			},
-			// 模拟所有参与者数据
+			// 获取真实参与者数据
 			allParticipants(): Participant[] {
-				if (!this.activity.id) return [] as Participant[];
+				if (this.activity.id == 0) return [] as Participant[];
+				// 如果 registrations 为空（可能是旧数据或未加载），则尝试返回空或降级处理
+				if (this.activity.registrations == null) return [] as Participant[];
 				
 				const list: Participant[] = [];
-				const names = ['张三', '李四', '王五', '赵六', '钱七', '孙八', '周九', '吴十', '陈十一', '刘十二'];
-				const phones = ['138****1234', '139****5678', '136****9012', '137****3456', '135****7890', '158****1111', '159****2222', '186****3333'];
+				this.activity.registrations.forEach((r) => {
+					// 查找签到时间
+					let checkinTime: string | null = null;
+					if (r.checkedIn) {
+						// 通过名字匹配签到记录（这在实际场景中不太严谨，最好是通过 registration_id 匹配，但前端模型目前可能没存关联）
+						// 不过我们在 mapBackendToFrontend 中已经处理了 checkinRecords，
+						// 更好的方式是让 Activity.registrations 直接包含 checkinTime
+						// 暂时通过名字匹配 checkinRecords
+						const record = this.activity.checkinRecords.find((cr) : boolean => cr.name == r.name);
+						if (record != null) {
+							checkinTime = record.time;
+						} else {
+							checkinTime = "已签到";
+						}
+					}
+
+					list.push({
+						name: r.name,
+						phone: r.phone,
+						checked: r.checkedIn,
+						checkinTime: checkinTime
+					} as Participant);
+				});
 				
-				for (let i = 0; i < this.totalCount; i++) {
-					const name = names[i % names.length] + (i >= names.length ? (i + 1) : '');
-					const phone = phones[i % phones.length];
-					
-					// 检查是否已签到
-					const record = this.activity.checkinRecords.find(r => r.name === name);
-					
-					const p: Participant = {
-						name: name,
-						phone: phone,
-						checked: record != null,
-						checkinTime: record != null ? record.time : null
-					};
-					list.push(p);
-				}
 				return list;
 			},
 			filteredParticipants(): Participant[] {
