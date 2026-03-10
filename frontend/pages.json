@@ -1,6 +1,15 @@
 
 {
   "pages": [
+    // #ifdef MP-WEIXIN
+    {
+      "path": "pages/user/my-activities/my-activities",
+      "style": {
+        "navigationBarTitleText": "我的报名",
+        "enablePullDownRefresh": true
+      }
+    },
+    // #endif
     {
       "path": "pages/activities/activities",
       "style": {
@@ -50,6 +59,12 @@
 			}
 		},
 		{
+			"path": "pages/profile/feedback/feedback",
+			"style": {
+				"navigationBarTitleText": "意见反馈"
+			}
+		},
+		{
 			"path": "pages/profile/edit/edit",
       "style": {
         "navigationBarTitleText": "编辑资料"
@@ -59,6 +74,20 @@
       "path": "pages/about/about",
       "style": {
         "navigationBarTitleText": "关于活动帮手"
+      }
+    },
+    // #ifndef MP-WEIXIN
+    {
+      "path": "pages/user/my-activities/my-activities",
+      "style": {
+        "navigationBarTitleText": "我的报名"
+      }
+    },
+    // #endif
+    {
+      "path": "pages/activity/ticket/ticket",
+      "style": {
+        "navigationBarTitleText": "报名凭证"
       }
     }
   ],
@@ -74,6 +103,7 @@
     "backgroundColor": "#FFFFFF",
     "borderStyle": "white",
     "list": [
+      // #ifndef MP-WEIXIN
       {
         "pagePath": "pages/activities/activities",
         "text": "首页",
@@ -86,6 +116,15 @@
         "iconPath": "static/tabbar/add.png",
         "selectedIconPath": "static/tabbar/add-active.png"
       },
+      // #endif
+      // #ifdef MP-WEIXIN
+      {
+        "pagePath": "pages/user/my-activities/my-activities",
+        "text": "我的报名",
+        "iconPath": "static/tabbar/ticket.png",
+        "selectedIconPath": "static/tabbar/ticket-active.png"
+      },
+      // #endif
       {
         "pagePath": "pages/profile/profile",
         "text": "我的",

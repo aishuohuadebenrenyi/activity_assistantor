@@ -1,5 +1,8 @@
 export const config = {
   // 注意：真机调试时请将 localhost 替换为电脑的局域网 IP 地址
-  BASE_URL: "http://localhost:9000/api",
-  TIMEOUT: 10000
+  // 生产环境应使用 HTTPS
+  BASE_URL: "http://localhost:9000/api", 
+  // BASE_URL: "https://api.yourdomain.com/api", // 上线时切换为 HTTPS
+  TIMEOUT: 10000,
+  ENCRYPTION_KEY: "your-secure-key" // 本地数据加密密钥 (示例)
 }

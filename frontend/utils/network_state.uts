@@ -1,0 +1,10 @@
+
+import { reactive } from 'vue'
+
+export const networkState = reactive({
+  isOnline: true
+})
+
+export const setNetworkStatus = (status: boolean) => {
+  networkState.isOnline = status
+}

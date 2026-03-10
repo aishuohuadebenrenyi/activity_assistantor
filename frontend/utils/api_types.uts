@@ -1,0 +1,16 @@
+
+export class RequestOptions {
+  url: string
+  method: string
+  data: any | null
+  header: any | null
+  skipQueue: boolean // 新增字段：是否跳过离线队列（用于队列重试时）
+  
+  constructor(url: string, method: string = 'GET', data: any | null = null, header: any | null = null, skipQueue: boolean = false) {
+    this.url = url
+    this.method = method
+    this.data = data
+    this.header = header
+    this.skipQueue = skipQueue
+  }
+}

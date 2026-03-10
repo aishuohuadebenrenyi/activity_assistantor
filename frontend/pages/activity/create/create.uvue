@@ -81,6 +81,7 @@
 
 <script>
 	import { addActivity, Activity } from '@/store/index.uts'
+	import { logEvent } from '@/utils/analytics.uts'
 
 	export default {
 		data() {
@@ -109,6 +110,7 @@
 			uni.onKeyboardHeightChange((res) => {
 				this.keyboardHeight = res.height;
 			});
+			logEvent('page_view', { page: 'create_activity' });
 		},
 		methods: {
 			goBack() {
@@ -122,8 +124,12 @@
 			},
 			async submitForm() {
 				if (this.isSubmitting) return;
+				
+				logEvent('activity_create_submit_click', { theme: this.form.theme });
+				
 				if (!this.form.name || !this.form.date || !this.form.time) {
 					uni.showToast({ title: '请完善活动信息', icon: 'none' });
+					logEvent('activity_create_validation_fail', { reason: 'missing_fields' });
 					return;
 				}
 				this.isSubmitting = true;
@@ -153,6 +159,7 @@
 					});
 				} catch (e) {
 					uni.showToast({ title: '创建失败，请重试', icon: 'none' });
+					logEvent('activity_create_failed', { error: JSON.stringify(e) });
 					this.isSubmitting = false;
 				}
 			}

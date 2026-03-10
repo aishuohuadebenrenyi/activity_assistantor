@@ -1,5 +1,8 @@
+
 import { reactive } from 'vue'
 import { request, RequestOptions } from '@/utils/request.uts'
+import { logEvent } from '@/utils/analytics.uts'
+import { setNetworkStatus } from '@/utils/network_state.uts'
 
 export interface CheckinRecord {
   id: number;
@@ -94,8 +97,43 @@ const MOCK_ACTIVITIES = [
 export const activitiesState = reactive({
   activities: MOCK_ACTIVITIES,
   isLoading: false,
-  error: ''
+  error: '',
+  isOnline: true
 });
+
+const STORAGE_KEY = 'activities_data';
+
+export const saveToStorage = () => {
+  try {
+    uni.setStorageSync(STORAGE_KEY, activitiesState.activities);
+    // console.log('Activities saved to storage');
+  } catch (e) {
+    console.error('Failed to save activities to storage', e);
+  }
+};
+
+export const loadFromStorage = () => {
+  try {
+    const data = uni.getStorageSync(STORAGE_KEY);
+    if (data != null) {
+       // UTS 中需要注意类型转换，这里假设存储的数据结构与 Activity[] 兼容
+       // 实际项目中可能需要更严格的类型检查
+       const activities = data as Activity[];
+       if (activities.length > 0) {
+         activitiesState.activities = activities;
+         // console.log('Activities loaded from storage', activities.length);
+       }
+    }
+  } catch (e) {
+    console.error('Failed to load activities from storage', e);
+  }
+};
+
+export const setOnlineStatus = (status: boolean) => {
+  activitiesState.isOnline = status;
+  setNetworkStatus(status);
+};
+
 
 // 后端 API 返回的数据结构 (Models)
 type RegistrationResponse = {
@@ -190,6 +228,7 @@ export const fetchActivities = async () => {
   try {
     const res = await request<ActivityResponse[]>(new RequestOptions('/activities', 'GET'));
     activitiesState.activities = res.map((item) => mapBackendToFrontend(item));
+    saveToStorage();
   } catch (e) {
     console.error("Fetch activities failed, using mock data", e);
     // 失败时不覆盖 Mock 数据，或者显示错误提示
@@ -220,9 +259,23 @@ export const addActivity = async (activity: Activity): Promise<Activity> => {
     const index = activitiesState.activities.indexOf(activity);
     if (index > -1) {
       activitiesState.activities[index] = realActivity;
+      saveToStorage();
     }
+    logEvent('activity_create_success', { id: realActivity.id, name: realActivity.name });
     return realActivity;
   } catch (e) {
+    // 如果是离线队列错误，不回滚，保留在本地（状态可能需要标记为 syncing）
+    if (e instanceof Error && e.message === 'OFFLINE_QUEUED') {
+        console.log('Activity creation queued offline');
+        // 这里可以给 activity 加个标记，比如 activity.syncStatus = 'pending'
+        // 但为了简化，暂不处理，用户看到的是“已创建”
+        // 实际上返回的是 input activity，缺少 id。
+        // 如果 UI 依赖 id 跳转，会有问题。
+        // 临时方案：给个随机负数 ID
+        activity.id = -Date.now(); 
+        return activity;
+    }
+
     console.error("Create activity failed", e);
     // 失败回滚
     const index = activitiesState.activities.indexOf(activity);

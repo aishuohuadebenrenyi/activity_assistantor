@@ -1,8 +1,53 @@
 
 <script>
+	import { setOnlineStatus, loadFromStorage } from '@/store/index.uts'
+	import { logEvent } from '@/utils/analytics.uts'
+	import { processQueue } from '@/utils/request.uts'
+
 	export default {
 		onLaunch: function() {
 			console.log('App Launch')
+			
+			// 1. 初始化本地存储数据
+			loadFromStorage();
+			
+			// 2. 检查初始网络状态
+			uni.getNetworkType({
+				success: (res) => {
+					// 兼容 uni-app x 的类型定义
+					const networkType = res.networkType;
+					const isOnline = networkType != 'none';
+					setOnlineStatus(isOnline);
+					console.log('Initial network type:', networkType);
+					logEvent('app_launch', { network: networkType });
+					
+					if (isOnline) {
+						processQueue();
+					}
+				}
+			});
+
+			// 3. 监听网络状态变化
+			uni.onNetworkStatusChange((res) => {
+				const isConnected = res.isConnected;
+				setOnlineStatus(isConnected);
+				if (!isConnected) {
+					uni.showToast({
+						title: '网络已断开，已切换至离线模式',
+						icon: 'none',
+						duration: 3000
+					});
+				} else {
+					uni.showToast({
+						title: '网络已恢复',
+						icon: 'success',
+						duration: 2000
+					});
+					// 触发离线队列同步
+					processQueue();
+				}
+				logEvent('network_change', { isConnected: isConnected, networkType: res.networkType });
+			});
 		},
 		onShow: function() {
 			console.log('App Show')

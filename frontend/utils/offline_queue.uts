@@ -1,0 +1,51 @@
+
+import { RequestOptions } from './api_types.uts'
+
+export type QueueItem = {
+  url: string
+  method: string
+  data: any | null
+  header: any | null
+  timestamp: number
+}
+
+const QUEUE_KEY = 'offline_request_queue'
+
+export const getQueue = (): QueueItem[] => {
+  try {
+    const data = uni.getStorageSync(QUEUE_KEY)
+    if (data != null) {
+      // UTS 类型转换需要注意
+      return data as QueueItem[]
+    }
+  } catch (e) {
+    console.error('Failed to load offline queue', e)
+  }
+  return [] as QueueItem[]
+}
+
+export const saveQueue = (queue: QueueItem[]) => {
+  try {
+    uni.setStorageSync(QUEUE_KEY, queue)
+  } catch (e) {
+    console.error('Failed to save offline queue', e)
+  }
+}
+
+export const addToQueue = (options: RequestOptions) => {
+  const queue = getQueue()
+  const item = {
+    url: options.url,
+    method: options.method,
+    data: options.data,
+    header: options.header,
+    timestamp: Date.now()
+  } as QueueItem
+  
+  queue.push(item)
+  saveQueue(queue)
+  uni.showToast({
+    title: '已存入离线队列',
+    icon: 'none'
+  })
+}

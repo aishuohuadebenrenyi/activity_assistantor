@@ -12,7 +12,8 @@
 				</view>
 			</view>
 			<view v-else>
-			<!-- 活动统计 -->
+			<!-- #ifndef MP-WEIXIN -->
+			<!-- 活动统计：仅在 App 端显示，小程序端不需要展示这些管理数据 -->
 			<view class="stats-card card">
 				<view class="card-header">
 					<text class="card-header-title">活动统计</text>
@@ -38,15 +39,19 @@
 					</view>
 				</view>
 			</view>
+			<!-- #endif -->
 
 			<!-- 活动详情卡片 (支持折叠) -->
 			<view class="activity-info-card">
-				<view class="info-header" @click="showDetail = !showDetail">
+				<view class="info-header" @click="toggleDetail">
 					<text class="info-title">活动详情</text>
+					<!-- #ifndef MP-WEIXIN -->
+                    <!-- 详情折叠功能仅在 App 端启用，小程序端默认全部展示 -->
 					<view class="detail-toggle">
 						<text class="toggle-icon">ℹ️</text>
 						<text class="toggle-text">{{ showDetail ? '收起' : '详情' }}</text>
 					</view>
+					<!-- #endif -->
 				</view>
 				<view class="info-meta">
 					<view class="info-item">
@@ -69,9 +74,11 @@
 				<view class="card-header">
 					<text class="card-header-title">详细信息</text>
 					<view class="header-actions">
+						<!-- #ifndef MP-WEIXIN -->
 						<view class="header-action" @click="toggleEdit" hover-class="hover-opacity">
 							<text class="action-text">{{ isEditing ? '完成' : '编辑' }}</text>
 						</view>
+						<!-- #endif -->
 						<view v-if="!isEditing" class="close-btn" @click="showDetail = false" hover-class="hover-opacity">
 							<text class="close-icon">×</text>
 						</view>
@@ -110,7 +117,8 @@
 				</view>
 			</view>
 
-			<!-- 活动工具 -->
+			<!-- #ifndef MP-WEIXIN -->
+			<!-- 活动工具：仅在 App 端显示，用于管理报名和分享 -->
 			<view class="tools-card card">
 				<view class="card-header">
 					<text class="card-header-title">活动工具</text>
@@ -132,13 +140,23 @@
 					</view>
 				</view>
 			</view>
+			<!-- #endif -->
 			</view>
 		</scroll-view>
+		<!-- #ifdef MP-WEIXIN -->
+        <!-- 小程序底部报名按钮 -->
+		<view class="bottom-bar">
+			<button class="join-btn" @click="joinActivity">
+				<text class="join-btn-text">立即报名</text>
+			</button>
+		</view>
+		<!-- #endif -->
 	</view>
 </template>
 
 <script>
 	import { activitiesState, updateActivity, Activity } from '@/store/index.uts'
+	import { logEvent } from '@/utils/analytics.uts'
 
 	export default {
 		data() {
@@ -162,7 +180,16 @@
 				this.activityId = parseInt(id as string);
 			}
 			this.initForm();
+			logEvent('page_view', { page: 'activity_detail', id: this.activityId });
 		},
+		// #ifdef MP-WEIXIN
+		onShareAppMessage(options) {
+			return {
+				title: this.activity.name,
+				path: `/pages/activity/detail/detail?id=${this.activityId}`
+			}
+		},
+		// #endif
 		computed: {
 			activity(): Activity {
 				const found = activitiesState.activities.find((a: Activity): boolean => a.id === this.activityId);
@@ -222,6 +249,7 @@
 				} else {
 					this.isEditing = true;
 					this.showDetail = true;
+					logEvent('detail_edit_click', { id: this.activityId });
 				}
 			},
 			saveChanges() {
@@ -237,12 +265,14 @@
 				updateActivity(updatedActivity);
 				this.isEditing = false;
 				uni.showToast({ title: '保存成功' });
+				logEvent('detail_edit_save', { id: this.activityId });
 			},
 			goToParticipants() {
 				if (!this.isActivityValid) {
 					uni.showToast({ title: '活动不存在', icon: 'none' });
 					return;
 				}
+				logEvent('detail_participants_click', { id: this.activityId });
 				uni.navigateTo({
 					url: `/pages/activity/participants/participants?id=${this.activityId}`
 				});
@@ -252,6 +282,7 @@
 					uni.showToast({ title: '活动不存在', icon: 'none' });
 					return;
 				}
+				logEvent('detail_share_click', { id: this.activityId });
 				uni.navigateTo({
 					url: `/pages/activity/share/share?id=${this.activityId}`
 				});
@@ -260,7 +291,35 @@
 				uni.switchTab({
 					url: '/pages/activities/activities'
 				});
+			},
+			toggleDetail() {
+				// #ifndef MP-WEIXIN
+				this.showDetail = !this.showDetail;
+				// #endif
+			},
+			// #ifdef MP-WEIXIN
+            /**
+             * 参与活动
+             * 目前仅为 Mock 实现，模拟报名成功后的跳转。
+             * 真实场景应调用后端 /register 接口，并处理支付（如有）。
+             */
+			joinActivity() {
+				uni.showLoading({ title: '报名中...' });
+				setTimeout(() => {
+					uni.hideLoading();
+					uni.showToast({
+						title: '报名成功',
+						icon: 'success'
+					});
+					setTimeout(() => {
+						// Redirect to ticket page
+						uni.navigateTo({
+							url: `/pages/activity/ticket/ticket?id=${this.activityId}`
+						});
+					}, 1500);
+				}, 1000);
 			}
+			// #endif
 		}
 	}
 </script>
@@ -515,4 +574,26 @@
 		from { opacity: 0; transform: translateY(-10px); }
 		to { opacity: 1; transform: translateY(0); }
 	}
+
+	/* #ifdef MP-WEIXIN */
+	.bottom-bar {
+		padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+		background-color: #FFFFFF;
+		border-top: 1px solid #E5E5EA;
+	}
+
+	.join-btn {
+		background-color: #007AFF;
+		border-radius: 24px;
+		height: 48px;
+		justify-content: center;
+		align-items: center;
+	}
+
+	.join-btn-text {
+		color: #FFFFFF;
+		font-size: 16px;
+		font-weight: 600;
+	}
+	/* #endif */
 </style>

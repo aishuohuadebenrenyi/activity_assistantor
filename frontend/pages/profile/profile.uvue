@@ -11,11 +11,13 @@
 								<text class="avatar-text">主</text>
 							</view>
 							<view class="user-details">
-								<text class="user-name">主办方用户</text>
+								<text class="user-name">{{ userTitle }}</text>
+								<!-- #ifndef MP-WEIXIN -->
 								<view class="user-badge">
 									<text class="badge-text">官方认证</text>
 								</view>
 								<text class="user-bio">致力于提供最好的活动管理服务。</text>
+								<!-- #endif -->
 							</view>
 						</view>
 						<view class="user-info-right">
@@ -23,6 +25,7 @@
 						</view>
 					</view>
 					
+					<!-- #ifndef MP-WEIXIN -->
 					<!-- 分割线 -->
 					<view class="divider"></view>
 					
@@ -41,8 +44,27 @@
 							<text class="stat-label">总参与</text>
 						</view>
 					</view>
+					<!-- #endif -->
 				</view>
 			</view>
+
+			<!-- #ifndef MP-WEIXIN -->
+			<!-- 活动管理 -->
+			<view class="activity-card card">
+				<view class="card-header">
+					<text class="card-header-title">我的活动</text>
+				</view>
+				<view class="list-group">
+					<view class="list-item" @click="goToMyActivities" hover-class="hover-opacity">
+						<view class="list-item-left">
+							<text class="list-icon">📝</text>
+							<text class="list-label">我的报名</text>
+						</view>
+						<text class="arrow">></text>
+					</view>
+				</view>
+			</view>
+			<!-- #endif -->
 
 			<!-- 设置选项 -->
 			<view class="settings-card card">
@@ -159,6 +181,14 @@
 			}
 		},
 		computed: {
+			userTitle(): string {
+				// #ifdef MP-WEIXIN
+				return '微信用户';
+				// #endif
+				// #ifndef MP-WEIXIN
+				return '主办方用户';
+				// #endif
+			},
 			totalActivities() {
 				return activitiesState.activities.length;
 			},
@@ -176,6 +206,9 @@
 		methods: {
 			goToEdit() {
 				uni.navigateTo({ url: '/pages/profile/edit/edit' });
+			},
+			goToMyActivities() {
+				uni.navigateTo({ url: '/pages/user/my-activities/my-activities' });
 			},
 			goToAbout() {
 				uni.navigateTo({ url: '/pages/about/about' });
@@ -200,7 +233,7 @@
 				this.notifyEnabled = e.detail.value;
 			},
 			onFeedback() {
-				uni.showToast({ title: '感谢您的反馈！', icon: 'success' });
+				uni.navigateTo({ url: '/pages/profile/feedback/feedback' });
 			}
 		}
 	}

@@ -42,9 +42,16 @@
 
 				<view v-else class="wechat-form">
 					<text class="wechat-desc">点击下方按钮唤起微信完成登录</text>
+					<!-- #ifdef MP-WEIXIN -->
+					<button class="submit-btn wechat-btn" :disabled="isLoggingIn" open-type="getPhoneNumber" @getphonenumber="onGetPhoneNumber" hover-class="hover-opacity">
+						<text class="submit-text">{{ isLoggingIn ? '登录中...' : '微信一键登录' }}</text>
+					</button>
+					<!-- #endif -->
+					<!-- #ifndef MP-WEIXIN -->
 					<button class="submit-btn wechat-btn" :disabled="isLoggingIn" @click="login" hover-class="hover-opacity">
 						<text class="submit-text">{{ isLoggingIn ? '登录中...' : '微信一键登录' }}</text>
 					</button>
+					<!-- #endif -->
 				</view>
 			</view>
 
@@ -122,7 +129,23 @@
 						url: '/pages/activities/activities'
 					});
 				}, 800);
+			},
+			// #ifdef MP-WEIXIN
+			onGetPhoneNumber(e) {
+				console.log('getPhoneNumber', e);
+				if (e.detail.errMsg === "getPhoneNumber:ok") {
+					this.isLoggingIn = true;
+					// Mock login process
+					setTimeout(() => {
+						this.isLoggingIn = false;
+						console.log('WeChat login success');
+						uni.navigateBack();
+					}, 800);
+				} else {
+					uni.showToast({ title: '获取手机号失败', icon: 'none' });
+				}
 			}
+			// #endif
 		}
 	}
 </script>

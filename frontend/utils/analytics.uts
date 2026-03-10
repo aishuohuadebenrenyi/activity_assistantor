@@ -1,0 +1,10 @@
+export type EventParams = any;
+
+export const logEvent = (eventName: string, params: EventParams | null = null) => {
+  const timestamp = new Date().toISOString();
+  // 开发环境下打印日志
+  console.log(`[Analytics] ${eventName} at ${timestamp}`, params);
+  
+  // 简单的本地存储策略，实际生产环境应批量上传
+  // 这里作为示例，暂不实现复杂的队列上传逻辑，仅预留位置
+}

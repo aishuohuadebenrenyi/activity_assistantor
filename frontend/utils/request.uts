@@ -1,21 +1,28 @@
+
 import { config } from './config.uts'
+import { networkState } from './network_state.uts'
+import { addToQueue, getQueue, saveQueue, QueueItem } from './offline_queue.uts'
+import { RequestOptions } from './api_types.uts'
 
-export class RequestOptions {
-  url: string
-  method: string
-  data: any | null
-  header: any | null
-  
-  constructor(url: string, method: string = 'GET', data: any | null = null, header: any | null = null) {
-    this.url = url
-    this.method = method
-    this.data = data
-    this.header = header
-  }
-}
+// 重新导出，方便其他文件引用
+export { RequestOptions } from './api_types.uts'
 
+let isProcessingQueue = false
+
+/**
+ * 通用网络请求封装
+ * 集成了离线队列机制：当网络不可用且非 GET 请求时，自动加入队列等待恢复
+ * @param options 请求选项
+ */
 export const request = <T>(options: RequestOptions): Promise<T> => {
   return new Promise<T>((resolve, reject) => {
+    // 检查是否离线且非 GET 请求
+    if (!networkState.isOnline && options.method !== 'GET' && !options.skipQueue) {
+       addToQueue(options)
+       reject(new Error('OFFLINE_QUEUED'))
+       return
+    }
+
     const fullUrl = config.BASE_URL + options.url
     
     uni.request({
@@ -30,15 +37,83 @@ export const request = <T>(options: RequestOptions): Promise<T> => {
         if (res.statusCode >= 200 && res.statusCode < 300) {
           // 尝试转换数据类型
           resolve(res.data as T)
+        } else if (res.statusCode === 401) {
+          // Token 过期或未登录
+          uni.showToast({ title: '登录已过期，请重新登录', icon: 'none' })
+          uni.reLaunch({ url: '/pages/auth/login' })
+          reject(new Error('Unauthorized'))
+        } else if (res.statusCode >= 500) {
+          // 服务器错误
+          uni.showToast({ title: '服务器开小差了，请稍后再试', icon: 'none' })
+          reject(new Error(`Server Error: ${res.statusCode}`))
         } else {
           console.error(`Request failed: ${res.statusCode} ${JSON.stringify(res.data)}`)
+          uni.showToast({ title: `请求失败: ${res.statusCode}`, icon: 'none' })
           reject(new Error(`Request failed with status ${res.statusCode}`))
         }
       },
       fail: (err) => {
         console.error(`Request error: ${JSON.stringify(err)}`)
-        reject(err)
+        
+        // 网络错误处理
+        if (options.method !== 'GET' && !options.skipQueue) {
+           // 再次检查网络状态，确认是网络问题导致的失败
+           // 注意：uni.request fail 通常是网络不通
+           addToQueue(options)
+           reject(new Error('OFFLINE_QUEUED'))
+        } else {
+           uni.showToast({ title: '网络连接失败，请检查设置', icon: 'none' })
+           reject(err)
+        }
       }
     })
   })
+}
+
+/**
+ * 处理离线队列
+ * 当网络恢复时调用，将队列中的请求按顺序发送
+ */
+export const processQueue = async () => {
+  if (isProcessingQueue) return
+  
+  const queue = getQueue()
+  if (queue.length === 0) return
+  
+  isProcessingQueue = true
+  uni.showLoading({ title: '正在同步离线数据...' })
+  
+  const failedQueue: QueueItem[] = []
+  
+  // 逐个处理队列
+  for (let i = 0; i < queue.length; i++) {
+    const item = queue[i]
+    try {
+      // 构造请求选项，标记 skipQueue 防止递归添加到队列
+      const options = new RequestOptions(
+        item.url,
+        item.method,
+        item.data,
+        item.header,
+        true // skipQueue
+      )
+      
+      await request(options)
+      
+    } catch (e) {
+      console.error('Failed to process queue item', e)
+      failedQueue.push(item)
+    }
+  }
+  
+  // 更新队列为失败的项目
+  saveQueue(failedQueue)
+  isProcessingQueue = false
+  uni.hideLoading()
+  
+  if (failedQueue.length === 0) {
+    uni.showToast({ title: '离线数据同步完成', icon: 'success' })
+  } else {
+    uni.showToast({ title: '部分数据同步失败', icon: 'none' })
+  }
 }
