@@ -46,6 +46,9 @@
 						<text class="card-header-title">报名人员</text>
 						<text class="section-count">{{ totalCount }}人 (已签{{ checkedCount }}人)</text>
 					</view>
+					<view class="header-action" @click="onScan" hover-class="hover-opacity" style="margin-right: 8px;">
+						<text class="action-text">扫码</text>
+					</view>
 					<view class="header-action" @click="onExport" hover-class="hover-opacity">
 						<text class="action-text">导出</text>
 					</view>
@@ -104,9 +107,11 @@
 </template>
 
 <script>
-	import { activitiesState, updateActivity, Activity } from '@/store/index.uts'
+	import { activitiesState, updateActivity, Activity, Registration, CheckinRecord } from '@/store/index.uts'
+import { request, RequestOptions } from '@/utils/request.uts'
 
-	type Participant = {
+type Participant = {
+		id: number,
 		name: string,
 		phone: string,
 		checked: boolean,
@@ -196,6 +201,7 @@
 					}
 
 					list.push({
+						id: r.id,
 						name: r.name,
 						phone: r.phone,
 						checked: r.checkedIn,
@@ -229,6 +235,85 @@
 				}
 				uni.showToast({ title: '导出功能开发中', icon: 'none' });
 			},
+			onScan() {
+				if (!this.isActivityValid) return;
+				
+				uni.scanCode({
+					success: (res) => {
+						const content = res.result;
+						console.log('Scan result:', content);
+						// 简单的格式校验
+						if (content.startsWith('CHECKIN:')) {
+							// 这里的 content 是类型为 string 的变量
+							this.performCheckin(content);
+						} else {
+							uni.showToast({ title: '无效的签到码', icon: 'none' });
+						}
+					},
+					fail: (err) => {
+						console.log('Scan failed:', err);
+						// Only show error if not cancelled by user (error code varies by platform, skipping specific check for simplicity)
+					}
+				});
+			},
+			async performCheckin(qrData: string) {
+				uni.showLoading({ title: '核销中...' });
+				try {
+					type CheckinResponse = {
+						message: string
+						user: string
+						already_checked: boolean
+					}
+					const res = await request<CheckinResponse>(
+						new RequestOptions(`/activities/${this.activityId}/checkin`, 'POST', { qr_data: qrData })
+					);
+					
+					uni.hideLoading();
+					
+					if (res.already_checked) {
+						uni.showToast({ title: `用户 ${res.user} 已经签到过了`, icon: 'none' });
+					} else {
+						uni.showToast({ title: `用户 ${res.user} 签到成功`, icon: 'success' });
+						// 更新本地状态
+						// 由于后端只返回了成功消息，我们需要手动更新本地数据以反映变化
+						// 解析 qrData 获取 registration_id (CHECKIN:aid:rid:ts)
+						const parts = qrData.split(':');
+						if (parts.length >= 3) {
+							const ridStr = parts[2];
+							const rid = parseInt(ridStr);
+							this.updateLocalCheckinStatus(rid);
+						}
+					}
+				} catch (e) {
+					uni.hideLoading();
+					uni.showToast({ title: '签到失败', icon: 'none' });
+					console.error(e);
+				}
+			},
+			updateLocalCheckinStatus(registrationId: number) {
+				const currentActivity = this.activity;
+				// 找到对应的 Registration
+				const reg = currentActivity.registrations.find((r: Registration): boolean => r.id === registrationId);
+				if (reg != null && !reg.checkedIn) {
+					reg.checkedIn = true;
+					
+					// 添加到 checkinRecords
+					const now = new Date();
+					const timeStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+					currentActivity.checkinRecords.push({
+						id: Date.now(),
+						name: reg.name,
+						phone: reg.phone,
+						time: timeStr
+					} as CheckinRecord);
+					
+					// 更新统计
+					currentActivity.checkins = currentActivity.checkinRecords.length;
+					
+					// 提交更新到 Store
+					updateActivity(currentActivity);
+				}
+			},
 			getAvatarColor(name) {
 				const colors = ['#007AFF', '#5856D6', '#34C759', '#FF9500', '#FF3B30', '#AF52DE'];
 				const index = name.charCodeAt(0) % colors.length;
@@ -239,52 +324,64 @@
 					uni.showToast({ title: '活动不存在', icon: 'none' });
 					return;
 				}
-				// 获取当前活动的深拷贝，这里我们假设 activitiesState 是响应式的，直接修改可能会有副作用，所以最好是更新 store
-				// 但由于 UTS 的类型限制，我们这里直接操作 store 的数据结构会比较复杂，
-				// 所以我们通过 updateActivity 方法来更新，该方法接收一个 Activity 对象。
 				
-				// 注意：在 UTS 中，解构赋值对于复杂对象可能不会像 JS 那样深拷贝，
-				// 且 Participant 只是一个类型别名，不是 Activity。
-				// 这里我们需要修改的是 this.activity (它是一个计算属性，直接修改可能无效或不规范)，
-				// 但实际上我们应该构建一个新的 Activity 对象或者修改 store 中的对象。
-				
-				// 为了简化，我们直接基于 this.activity 构建要更新的数据。
-				// 这里的 this.activity 是从 store 中 find 出来的，直接修改它的属性（如果是对象引用）可能会反应到 store，
-				// 但为了触发视图更新和遵循单向数据流（虽然这里是 store 模式），我们应该调用 action。
-				
+				// 1. 获取当前活动引用
 				const currentActivity = this.activity;
-				if (currentActivity.id === 0) return; // 无效活动
+				if (currentActivity.id === 0) return;
 
-				// 查找签到记录索引
-				const recordIndex = currentActivity.checkinRecords.findIndex((r): boolean => r.name === participant.name);
+				// 2. 查找签到记录索引 (使用 registration_id 或 name 匹配)
+				// 理想情况下 checkinRecords 应该有 registration_id，但这里我们还是尽量兼容
+				// 如果没有 registration_id，退而求其次用名字
+				let recordIndex = -1;
+				// 先尝试用 registration_id 查找（如果 checkinRecord 有这个字段且 participant.id 有效）
+				// 但 Participant 的 id 实际上是 registration.id
+				// 而 CheckinRecord 在 store 里定义是 { id, name, phone, time }，并没有 explicit registration_id
+				// 所以这里还是只能用 name 查找 checkinRecords
+				recordIndex = currentActivity.checkinRecords.findIndex((r: CheckinRecord): boolean => r.name === participant.name);
+				
+				// 3. 查找 Registration 对象索引（使用 ID 精确查找）
+				const regIndex = currentActivity.registrations.findIndex((r: Registration): boolean => r.id === participant.id);
 				
 				if (participant.checked) {
-					// 取消签到
+					// --- 执行取消签到逻辑 ---
 					if (recordIndex !== -1) {
+						// 从 checkinRecords 移除
 						currentActivity.checkinRecords.splice(recordIndex, 1);
-						uni.showToast({ title: `${participant.name} 已取消签到`, icon: 'none' });
 					}
+					// 更新 registrations 中的状态
+					if (regIndex !== -1) {
+						currentActivity.registrations[regIndex].checkedIn = false;
+					} else {
+						console.error("Registration not found for ID:", participant.id);
+					}
+					uni.showToast({ title: `${participant.name} 已取消签到`, icon: 'none' });
 				} else {
-					// 签到
-					// 如果已经签到了（理论上前端状态已过滤，但为了安全再次检查）
+					// --- 执行签到逻辑 ---
 					if (recordIndex === -1) {
 						const now = new Date();
 						const timeStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
 						
+						// 添加到 checkinRecords
 						currentActivity.checkinRecords.push({
 							id: Date.now(),
 							name: participant.name,
 							phone: participant.phone,
 							time: timeStr
-						});
-						uni.showToast({ title: `${participant.name} 签到成功！`, icon: 'success' });
+						} as CheckinRecord);
 					}
+					// 更新 registrations 中的状态
+					if (regIndex !== -1) {
+						currentActivity.registrations[regIndex].checkedIn = true;
+					} else {
+						console.error("Registration not found for ID:", participant.id);
+					}
+					uni.showToast({ title: `${participant.name} 签到成功`, icon: 'success' });
 				}
 				
-				// 更新统计数据
+				// 4. 更新统计数据
 				currentActivity.checkins = currentActivity.checkinRecords.length;
 				
-				// 提交更新到 Store
+				// 5. 提交更新到 Store
 				updateActivity(currentActivity);
 			},
 			goHome() {

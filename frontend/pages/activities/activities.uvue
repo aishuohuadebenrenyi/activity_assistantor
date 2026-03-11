@@ -54,7 +54,7 @@
 							<text class="icon-text">🔍</text>
 						</view>
 						<!-- #ifndef MP-WEIXIN -->
-						<view class="primary-btn-small" @click="goToCreate" hover-class="hover-opacity">
+						<view id="create-btn-guide" class="primary-btn-small" @click="goToCreate" hover-class="hover-opacity">
 							<text class="icon-plus-small">+</text>
 							<text class="btn-text-small">新建</text>
 						</view>
@@ -90,8 +90,8 @@
 		
 		<!-- 新手引导遮罩 -->
 		<view v-if="showOnboarding" class="onboarding-mask" @click="closeOnboarding">
-			<view class="onboarding-tip">
-				<text class="tip-arrow">↗️</text>
+			<view class="onboarding-tip" :style="{ top: guideTop + 'px', right: guideRight + 'px' }">
+				<text class="tip-arrow">⬆️</text>
 				<text class="tip-text">点击这里创建您的第一个活动</text>
 				<view class="tip-btn">
 					<text class="tip-btn-text">我知道了</text>
@@ -121,6 +121,8 @@
 				lastTabBarToggleAt: 0,
 				currentFilter: 'all',
 				showOnboarding: false, // 新手引导显示状态
+				guideTop: 200,
+				guideRight: 20,
 				filters: [
 					{ label: '全部', value: 'all' },
 					{ label: '进行中', value: 'ongoing' },
@@ -196,10 +198,28 @@
 			const hasSeen = uni.getStorageSync('has_seen_onboarding');
 			if (!hasSeen) {
 				this.showOnboarding = true;
+				setTimeout(() => {
+					this.updateGuidePosition();
+				}, 200);
 			}
 			// #endif
 		},
 		methods: {
+			updateGuidePosition() {
+				uni.createSelectorQuery().in(this).select('#create-btn-guide').boundingClientRect((rect) => {
+					if (rect != null) {
+						// 按钮底部位置 + 偏移量
+						this.guideTop = rect.bottom + 5;
+						// 计算右侧距离：屏幕宽度 - 按钮右侧位置 + 按钮宽度的一半(让箭头大致对准按钮中心)
+						// 或者简单地对齐右边
+						const windowInfo = uni.getSystemInfoSync();
+						// 按钮右边距屏幕右边的距离
+						const rightDist = windowInfo.windowWidth - rect.right;
+						// 箭头大概在 tip 容器的最右侧，稍微往左一点点
+						this.guideRight = rightDist - 10; 
+					}
+				}).exec();
+			},
 			closeOnboarding() {
 				this.showOnboarding = false;
 				uni.setStorageSync('has_seen_onboarding', true);
@@ -458,8 +478,6 @@
 
 	.onboarding-tip {
 		position: absolute;
-		top: 100px;
-		right: 20px;
 		align-items: flex-end;
 	}
 
@@ -467,7 +485,7 @@
 		font-size: 40px;
 		color: #FFFFFF;
 		margin-bottom: 10px;
-		margin-right: 20px;
+		margin-right: 10px;
 	}
 
 	.tip-text {

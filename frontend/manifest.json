@@ -7,12 +7,17 @@
 	"uni-app-x": {},
 	"quickapp": {},
 	"mp-weixin": {
-		"appid": "",
+		"appid": "wx_mock_appid_123456",
 		"setting": {
 			"urlCheck": false
 		},
 		"usingComponents": true,
-		"lazyCodeLoading": "requiredComponents"
+		"lazyCodeLoading": "requiredComponents",
+		"permission": {
+			"scope.userLocation": {
+				"desc": "你的位置信息将用于查找附近的活动"
+			}
+		}
 	},
 	"mp-alipay": {
 		"usingComponents": true
@@ -55,9 +60,20 @@
 	},
 	"app-ios": {
 		"distribute": {
-			"modules": {},
+			"modules": {
+				"payment": {},
+				"oauth": {
+					"apple": {}
+				}
+			},
 			"icons": {},
-			"splashScreens": {}
+			"splashScreens": {},
+			"privacyDescription": {
+				"NSCameraUsageDescription": "需要您的相机权限以扫描活动二维码进行签到。",
+				"NSPhotoLibraryUsageDescription": "需要您的相册权限以选择并上传活动封面图片。",
+				"NSPhotoLibraryAddUsageDescription": "需要您的相册权限以保存活动二维码图片。",
+				"NSLocationWhenInUseUsageDescription": "需要您的位置权限以展示活动地点及导航。"
+			}
 		}
 	},
 	"web": {

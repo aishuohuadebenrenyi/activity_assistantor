@@ -7,3 +7,7 @@ class Config:
     
     # Aliyun FC specific config can be added here
     FC_SERVICE_NAME = os.environ.get('FC_SERVICE_NAME')
+
+    # WeChat Mini Program Config
+    WECHAT_APPID = os.environ.get('WECHAT_APPID') or 'wx_mock_appid_123456'
+    WECHAT_SECRET = os.environ.get('WECHAT_SECRET') or 'wx_mock_secret_abcdef'

@@ -8,10 +8,10 @@
 
 | 模块 | 选型建议 | 理由 |
 | :--- | :--- | :--- |
-| **二维码类型** | **普通链接二维码** (Common Link) | 1. 兼容性好：微信扫进小程序，浏览器扫进 H5<br>2. App 端生成简单，无需后端绘图<br>3. 微信后台配置灵活 |
+| **二维码类型** | **普通链接二维码** (Common Link) & **小程序码** (Mini Program Code) | 1. 普通链接二维码兼容性好，支持非微信环境唤起<br>2. 小程序码辨识度高，微信内体验最佳<br>3. URL Link 适合短信/外部浏览器传播 |
 | **账号体系** | **手机号 One-ID** | 唯一能打通 App (手机号注册) 与小程序 (微信授权手机号) 的标识 |
 | **前端框架** | **uni-app x** | 复用现有 `frontend` 代码，通过条件编译处理差异 |
-| **后端接口** | **RESTful API** | 需新增 `/api/activity/join` (报名) 和 `/api/auth/wechat` (微信登录) |
+| **后端接口** | **RESTful API** | 新增 `/api/activities/<id>/share` 获取分享物料 |
 
 ---
 
@@ -25,18 +25,26 @@ sequenceDiagram
     participant User as 用户 (微信扫码)
     participant MP as 小程序端
     participant Server as 后端服务
+    participant WeChat as 微信接口
 
-    Note over App: 1. 创建活动
-    App->>App: 生成二维码 (内容: https://domain.com/a?id=1001)
-    App->>User: 展示/分享二维码图片
+    Note over App: 1. 获取分享物料
+    App->>Server: GET /api/activities/1001/share
+    Server->>WeChat: 获取 AccessToken
+    Server->>WeChat: 生成 URL Link (generate_urllink)
+    Server->>WeChat: 生成 小程序码 (getwxacodeunlimit)
+    Server-->>App: 返回 { url_link, qrcode_base64 }
+    
+    Note over App: 2. 展示分享页
+    App->>App: 展示活动海报 + 小程序码
+    App->>User: 复制链接 或 保存海报
 
-    Note over User: 2. 微信扫码
+    Note over User: 3. 微信扫码/点击链接
     User->>MP: 微信解析 URL，唤起小程序
-    MP->>MP: onLoad(options) 解析参数 q
+    MP->>MP: onLoad(options) 解析参数 q 或 scene
     MP->>Server: GET /api/activity/1001 (获取详情)
     Server-->>MP: 返回活动信息
 
-    Note over MP: 3. 用户浏览并报名
+    Note over MP: 4. 用户浏览并报名
     MP->>User: 展示活动详情 + "立即报名"按钮
     User->>MP: 点击报名
     
@@ -54,44 +62,61 @@ sequenceDiagram
 
 ### 2.2 关键技术点
 
-#### A. 普通链接二维码配置
-1.  登录 [微信公众平台](https://mp.weixin.qq.com)。
-2.  进入 **开发 -> 开发管理 -> 开发设置 -> 扫普通链接二维码打开小程序**。
-3.  添加规则：
-    *   **二维码规则**：`https://你的域名/activity/`
-    *   **前缀占用规则**：选择“不占用”
-    *   **校验文件**：下载文件放到域名根目录
-    *   **小程序功能页面**：`pages/activity/detail/detail` (或其他落地页)
-    *   **测试范围**：开发版/体验版/线上版
+#### A. 后端接口实现 (Python Flask)
+
+后端需提供接口生成分享所需的物料。
+
+**接口定义**: `GET /api/activities/<id>/share`
+
+**响应示例**:
+```json
+{
+  "url_link": "https://wxaurl.cn/AbCdEf",
+  "qrcode_data": "data:image/jpeg;base64,....",
+  "activity_info": { ... }
+}
+```
+
+**依赖配置**:
+在 `config.py` 中增加：
+```python
+WECHAT_APPID = os.environ.get('WECHAT_APPID')
+WECHAT_SECRET = os.environ.get('WECHAT_SECRET')
+```
 
 #### B. 小程序端参数解析
-在 `frontend/pages/activity/detail/detail.uvue` (或专用落地页) 中处理：
+
+在 `frontend/pages/activity/detail/detail.uvue` 中统一处理入口参数：
 
 ```typescript
 onLoad(options: OnLoadOptions) {
-  // 场景1: 扫普通链接二维码进入
+  // 场景1: 扫普通链接二维码进入 (q参数)
   if (options['q']) {
     const q = decodeURIComponent(options['q'] as string);
     // 提取 id，假设链接是 https://domain.com/activity/123
     const id = q.split('/').pop(); 
     this.loadActivity(id);
   }
-  // 场景2: 小程序内部跳转 / App 分享卡片
+  // 场景2: 扫小程序码进入 (scene参数)
+  else if (options['scene']) {
+    // scene 内容为 id=123
+    const scene = decodeURIComponent(options['scene'] as string);
+    const id = scene.split('=')[1];
+    this.loadActivity(id);
+  }
+  // 场景3: 小程序内部跳转 / App 分享卡片
   else if (options['id']) {
     this.loadActivity(options['id']);
   }
 }
 ```
 
-#### C. 手机号授权登录
-利用微信 `button open-type="getPhoneNumber"` 能力：
+#### C. App 端分享页实现
 
-```html
-<!-- 伪代码 -->
-<button open-type="getPhoneNumber" @getphonenumber="onGetPhoneNumber">
-  微信一键登录
-</button>
-```
+在 `frontend/pages/activity/share/share.uvue` 中：
+1. 调用后端接口获取 `url_link` 和 `qrcode_data`。
+2. **复制链接**：使用 `uni.setClipboardData` 复制 `url_link`。
+3. **保存海报**：将 `qrcode_data` (Base64) 绘制到 Canvas 或直接保存图片。
 
 ---
 
@@ -103,36 +128,16 @@ onLoad(options: OnLoadOptions) {
 2.  点击顶部 **普通编译** 下拉框 -> **添加编译模式**。
 3.  **模式名称**：模拟扫码 1001。
 4.  **启动页面**：`pages/activity/detail/detail`。
-5.  **启动参数**：`q=https%3A%2F%2Fdomain.com%2Factivity%2F1001` (注意 URL Encode)。
+5.  **启动参数**：
+    *   测试普通链接：`q=https%3A%2F%2Fdomain.com%2Factivity%2F1001`
+    *   测试小程序码：`scene=id%3D1001`
 6.  **验证**：查看控制台是否正确解析出 `id=1001` 并发起请求。
 
 ### 3.2 真机体验版测试
 
-1.  确保微信后台已配置“测试链接”（如 `https://domain.com/activity/test`）。
-2.  上传小程序代码为“体验版”。
-3.  使用草料二维码生成器，将 `https://domain.com/activity/test` 生成二维码图片。
-4.  使用微信扫描该二维码。
-5.  **验证**：
+1.  确保微信后台已配置“测试链接”或已发布小程序码。
+2.  使用 App 生成的分享海报。
+3.  使用微信扫描该二维码。
+4.  **验证**：
     *   是否直接拉起小程序？
     *   是否进入详情页？
-    *   页面数据是否加载成功？
-
-### 3.3 账号互通测试 (关键)
-
-**测试用例 TC-SYNC-001**：
-1.  **前提**：App 端已注册用户 A (手机号 138xxxx)。
-2.  **操作**：
-    *   用户 A 使用微信 (绑定同手机号) 扫码进入小程序。
-    *   点击报名，授权手机号。
-3.  **预期**：
-    *   小程序端提示“报名成功”。
-    *   App 端刷新“我的报名”，出现该活动。
-    *   App 端查看“个人中心”，头像/昵称应保持一致 (或合并)。
-
-**测试用例 TC-SYNC-002**：
-1.  **前提**：新用户 B (手机号 139xxxx) 从未使用过 App。
-2.  **操作**：
-    *   微信扫码 -> 授权手机号报名。
-    *   下载 App -> 使用 139xxxx + 验证码登录。
-3.  **预期**：
-    *   App 登录后，在“我的报名”中能看到刚才在小程序报名的活动。

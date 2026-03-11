@@ -42,9 +42,9 @@
 					<!-- 二维码区域 -->
 					<view class="qr-section">
 						<view class="qr-code">
-							<!-- 模拟二维码矩阵 -->
-							<view class="qr-pixel-grid">
-								<view v-for="i in 49" :key="i" :class="['qr-pixel', (i * 7 + 3) % 2 === 0 ? 'black' : '']"></view>
+							<image v-if="qrcodeData" :src="qrcodeData" class="qr-image" mode="aspectFit"></image>
+							<view v-else class="qr-placeholder">
+								<text class="loading-text">加载中...</text>
 							</view>
 						</view>
 						<text class="qr-tip">长按识别二维码报名</text>
@@ -68,17 +68,26 @@
 
 <script>
 	import { activitiesState, Activity } from '@/store/index.uts'
+	import { request, RequestOptions } from '@/utils/request.uts'
+
+	type ShareResponse = {
+		url_link: string
+		qrcode_data: string
+	}
 
 	export default {
 		data() {
 			return {
-				activityId: 0
+				activityId: 0,
+				urlLink: '',
+				qrcodeData: ''
 			}
 		},
 		onLoad(options) {
 			const id = options['id'];
 			if (id != null) {
 				this.activityId = parseInt(id as string);
+				this.fetchShareData();
 			}
 		},
 		computed: {
@@ -110,14 +119,32 @@
 			}
 		},
 		methods: {
+			async fetchShareData() {
+				if (!this.activityId) return;
+				try {
+					const res = await request<ShareResponse>(
+						new RequestOptions(`/activities/${this.activityId}/share`, 'GET')
+					);
+					this.urlLink = res.url_link;
+					this.qrcodeData = res.qrcode_data;
+				} catch (e) {
+					console.error('Fetch share data failed', e);
+					uni.showToast({ title: '加载分享信息失败', icon: 'none' });
+				}
+			},
 			copyLink() {
 				if (!this.isActivityValid) {
 					uni.showToast({ title: '活动不存在', icon: 'none' });
 					return;
 				}
-				const link = `https://act.helper/share/${this.activityId}`;
+				
+				if (!this.urlLink) {
+					uni.showToast({ title: '链接加载中...', icon: 'none' });
+					return;
+				}
+
 				uni.setClipboardData({
-					data: link,
+					data: this.urlLink,
 					success: () => {
 						uni.showToast({ title: '链接已复制', icon: 'success' });
 					},
@@ -131,7 +158,15 @@
 					uni.showToast({ title: '活动不存在', icon: 'none' });
 					return;
 				}
-				uni.showLoading({ title: '生成海报中...' });
+				
+				if (!this.qrcodeData) {
+					uni.showToast({ title: '二维码加载中...', icon: 'none' });
+					return;
+				}
+
+				uni.showLoading({ title: '保存海报中...' });
+				// 实际项目中这里应实现将 Base64 转为图片并保存的逻辑
+				// 或者使用 Canvas 绘制海报
 				setTimeout(() => {
 					uni.hideLoading();
 					uni.showToast({ title: '海报已保存到相册', icon: 'success' });
@@ -273,22 +308,25 @@
 		border: 1px solid #E5E5EA;
 		padding: 10px;
 		margin-bottom: 12px;
+		justify-content: center;
+		align-items: center;
 	}
 
-	.qr-pixel-grid {
+	.qr-image {
+		width: 140px;
+		height: 140px;
+	}
+	
+	.qr-placeholder {
+		justify-content: center;
+		align-items: center;
 		width: 100%;
 		height: 100%;
-		flex-direction: row;
-		flex-wrap: wrap;
 	}
-
-	.qr-pixel {
-		width: 14.28%;
-		height: 14.28%;
-	}
-
-	.qr-pixel.black {
-		background-color: #000000;
+	
+	.loading-text {
+		font-size: 14px;
+		color: #8E8E93;
 	}
 
 	.qr-tip {

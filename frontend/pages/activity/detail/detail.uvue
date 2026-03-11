@@ -141,6 +141,11 @@
 				</view>
 			</view>
 			<!-- #endif -->
+			
+			<!-- 举报入口 (符合 App Store 审核要求) -->
+			<view class="report-section">
+				<text class="report-text" @click="onReport">举报此活动</text>
+			</view>
 			</view>
 		</scroll-view>
 		<!-- #ifdef MP-WEIXIN -->
@@ -318,13 +323,42 @@
 						});
 					}, 1500);
 				}, 1000);
-			}
+			},
 			// #endif
+			
+			onReport() {
+				uni.showActionSheet({
+					itemList: ['垃圾广告', '色情低俗', '违法违规', '欺诈信息', '其他'],
+					success: (res) => {
+						uni.showLoading({ title: '提交中...' });
+						// Mock 提交举报
+						setTimeout(() => {
+							uni.hideLoading();
+							uni.showToast({
+								title: '举报已提交，我们会尽快处理',
+								icon: 'none'
+							});
+						}, 1000);
+					}
+				});
+			}
 		}
 	}
 </script>
 
 <style scoped>
+	.report-section {
+		align-items: center;
+		padding: 20px 0;
+		margin-top: 20px;
+	}
+	
+	.report-text {
+		font-size: 14px;
+		color: #8E8E93;
+		text-decoration: underline;
+	}
+
 	.container {
 		flex: 1;
 		background-color: #F2F2F7;

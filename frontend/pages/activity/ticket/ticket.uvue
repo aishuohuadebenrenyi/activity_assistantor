@@ -15,11 +15,14 @@
         </view>
         
         <view class="qr-section">
-          <view class="qr-placeholder">
-            <text class="qr-text">QR Code</text>
+          <view class="qr-code-box">
+             <image v-if="qrCodeUrl" :src="qrCodeUrl" class="qr-image" mode="aspectFit"></image>
+             <view v-else class="qr-placeholder">
+               <text class="qr-text">加载中...</text>
+             </view>
           </view>
           <text class="instruction">入场请出示此二维码</text>
-          <text class="ticket-no">No. 202305010089</text>
+          <text class="ticket-no" v-if="ticketCode">NO. {{ ticketCode.substring(0, 16) }}...</text>
         </view>
       </view>
 
@@ -88,11 +91,20 @@
 
 <script lang="uts">
 import { activitiesState, Activity } from '@/store/index.uts'
+import { request, RequestOptions } from '@/utils/request.uts'
+
+type TicketResponse = {
+    registration: any
+    ticket_code: string
+    activity: any
+}
 
 export default {
   data() {
     return {
-      activity: null as Activity | null
+      activity: null as Activity | null,
+      ticketCode: '',
+      qrCodeUrl: ''
     }
   },
   onLoad(options) {
@@ -102,10 +114,25 @@ export default {
       const found = activitiesState.activities.find((a: Activity): boolean => a.id == id)
       if (found != null) {
         this.activity = found
+        this.fetchTicket(id)
       }
     }
   },
   methods: {
+    async fetchTicket(id: number) {
+        try {
+            const res = await request<TicketResponse>(
+                new RequestOptions(`/activities/${id}/my-ticket`, 'GET')
+            )
+            this.ticketCode = res.ticket_code
+            // Generate QR Code URL using a public API for simplicity
+            // The content is the base64 ticket code
+            this.qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(this.ticketCode)}`
+        } catch (e) {
+            console.error('Fetch ticket failed', e)
+            uni.showToast({ title: '获取电子票失败', icon: 'none' })
+        }
+    },
     // #ifdef MP-WEIXIN
     /**
      * 扫码签到
@@ -247,7 +274,7 @@ export default {
   flex-direction: column;
   width: 100%;
 }
-.qr-placeholder {
+.qr-code-box {
   width: 180px;
   height: 180px;
   border: 4px solid #000;
@@ -257,7 +284,14 @@ export default {
   justify-content: center;
   background-color: #fff;
   margin-bottom: 16px;
+  overflow: hidden;
 }
+
+.qr-image {
+    width: 172px;
+    height: 172px;
+}
+
 .qr-text {
   font-size: 18px;
   color: #000;
