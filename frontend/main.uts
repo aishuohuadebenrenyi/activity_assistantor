@@ -1,9 +1,27 @@
 
-import App from './App.uvue'
+/**
+ * uni-app x 应用入口文件
+ * 
+ * 该文件负责初始化 Vue 应用实例，并进行全局配置。
+ * 在 uni-app x 中，通过 `createSSRApp` 方法创建支持服务端渲染（SSR）特性的应用实例。
+ */
 
+import App from './App.uvue'
 import { createSSRApp } from 'vue'
+
+/**
+ * 创建应用实例的工厂函数
+ * 
+ * @returns {Object} 包含应用实例的包装对象
+ * @description
+ * 1. 初始化根组件 App.uvue。
+ * 2. 挂载全局状态管理（Pinia/Vuex）或全局指令（可选）。
+ * 3. 供 HBuilderX 编译器调用以启动跨平台应用。
+ */
 export function createApp() {
+	// 创建 SSR 兼容的应用实例，增强首屏加载性能
 	const app = createSSRApp(App)
+	
 	return {
 		app
 	}

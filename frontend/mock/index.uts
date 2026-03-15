@@ -13,6 +13,18 @@ export const delay = (ms: number = 500): Promise<void> => {
  * 拦截请求并返回 Mock 数据
  */
 export const handleMockRequest = async <T>(url: string, method: string, data: any | null): Promise<T> => {
+  /**
+   * Mock 路由分发器：在 config.USE_MOCK=true 时由 request.uts 调用。
+   *
+   * 设计目标：
+   * - 用尽量贴近后端的响应结构，保证页面与 store 转换逻辑可在无后端时运行；
+   * - 对部分写操作（PUT）做内存态更新，模拟“数据被保存”的用户体验。
+   *
+   * 参数：
+   * - url: 业务路径（不含 BASE_URL）
+   * - method: HTTP 方法
+   * - data: 请求体（JSON）
+   */
   await delay();
   
   console.log(`[Mock] ${method} ${url}`, data);

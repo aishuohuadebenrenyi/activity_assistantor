@@ -4,11 +4,24 @@ import base64
 from flask import current_app
 
 class WeChatService:
+    """
+    微信能力封装（小程序登录、内容安全、分享链接与小程序码）。
+
+    当前实现策略：
+    - 若未配置真实 WECHAT_APPID/WECHAT_SECRET（或处于 mock 配置），返回 mock 结果便于本地开发；
+    - 生产环境需对 access_token 做缓存（有效期 7200s），并处理接口失败与重试。
+    """
     @staticmethod
     def get_access_token():
         """
-        Get WeChat Access Token.
-        In production, this should be cached (Redis/DB) for 7200s.
+        获取微信 access_token。
+
+        返回：
+        - str | None: access_token 字符串；获取失败返回 None。
+
+        生产建议：
+        - access_token 需缓存（Redis/DB），避免频繁调用导致限流；
+        - 并发获取时建议加锁/单飞，避免缓存击穿。
         """
         appid = current_app.config.get('WECHAT_APPID')
         secret = current_app.config.get('WECHAT_SECRET')
@@ -33,7 +46,15 @@ class WeChatService:
     @staticmethod
     def generate_url_link(path, query="", is_expire=True, expire_type=1, expire_interval=30):
         """
-        Generate URL Link (https://wxaurl.cn/...)
+        生成微信 URL Link（用于分享/拉起小程序）。
+
+        参数：
+        - path: 小程序页面路径（如 pages/activity/detail/detail）
+        - query: querystring（如 id=123）
+        - is_expire/expire_type/expire_interval: 过期策略参数（透传微信接口）
+
+        返回：
+        - str | None: url_link；若失败返回 None；mock 模式下返回可读的占位链接。
         """
         token = WeChatService.get_access_token()
         if not token:
@@ -66,7 +87,15 @@ class WeChatService:
     @staticmethod
     def get_unlimited_qrcode(scene, page="pages/index/index", width=430):
         """
-        Get Unlimited Mini Program Code (Buffer/Base64)
+        获取小程序码（无数量限制）。
+
+        参数：
+        - scene: 场景参数（建议使用短字符串，如 id=123）
+        - page: 目标页面路径
+        - width: 图片宽度
+
+        返回：
+        - str | None: DataURL（data:image/...;base64,xxxx）；失败返回 None。
         """
         token = WeChatService.get_access_token()
         if not token:
@@ -103,7 +132,13 @@ class WeChatService:
     @staticmethod
     def get_openid(code):
         """
-        Convert JS Code to OpenID (Mini Program Login)
+        使用微信登录 code 换取 openid（小程序登录）。
+
+        参数：
+        - code: 小程序登录返回的 code
+
+        返回：
+        - str | None: openid；失败返回 None；mock 模式下返回 mock_openid_<code>。
         """
         appid = current_app.config.get('WECHAT_APPID')
         secret = current_app.config.get('WECHAT_SECRET')
@@ -128,7 +163,18 @@ class WeChatService:
     @staticmethod
     def check_content_security(content):
         """
-        WeChat Message Security Check (msgSecCheck)
+        微信内容安全校验（msgSecCheck）。
+
+        参数：
+        - content: 待检测文本内容
+
+        返回：
+        - bool: 是否通过（True 通过，False 命中违规）
+
+        说明：
+        - mock 模式下使用关键词匹配模拟拦截；
+        - 真实接口若异常，当前实现采取 fail-safe（返回 True），以避免因微信接口波动影响业务可用性；
+          生产环境可按合规要求改为 fail-closed（接口异常时拒绝发布）。
         """
         token = WeChatService.get_access_token()
         if not token:

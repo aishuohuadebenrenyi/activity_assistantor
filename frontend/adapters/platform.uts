@@ -1,0 +1,71 @@
+/**
+ * 跨端适配层
+ * 
+ * 本文件负责处理不同运行环境（微信小程序、iOS App、H5 等）之间的行为差异。
+ * 通过 uni-app 的条件编译指令（#ifdef）实现针对特定平台的优化逻辑，
+ * 为上层业务提供统一的跨端调用接口。
+ */
+
+// 支持的运行平台枚举
+export type ClientPlatform = 'mp_weixin' | 'ios' | 'h5' | 'unknown'
+
+/**
+ * 获取当前运行平台标识
+ * 
+ * @returns {ClientPlatform} 返回当前运行环境对应的字符串标识
+ * @description
+ * 1. 用于后端接口请求头 `X-Client-Platform`，辅助后端进行设备适配与业务统计。
+ * 2. 作为数据埋点系统（Analytics）的核心维度字段。
+ * 3. 决定 UI 渲染策略（如某些功能仅在特定端展示）。
+ */
+export const getClientPlatform = (): ClientPlatform => {
+  let p: ClientPlatform = 'unknown'
+  
+  // 微信小程序平台
+  // #ifdef MP-WEIXIN
+  p = 'mp_weixin'
+  // #endif
+  
+  // App 端（iOS/Android）
+  // #ifdef APP-PLUS
+  const sys = uni.getSystemInfoSync()
+  // 当前仅针对 iOS 进行了深度适配，Android 暂归为 unknown 或按需扩展
+  if ((sys as any).platform == 'ios') p = 'ios'
+  else p = 'unknown'
+  // #endif
+  
+  // H5 网页端
+  // #ifdef H5
+  p = 'h5'
+  // #endif
+  
+  return p
+}
+
+/**
+ * 跨端打开外部链接
+ * 
+ * @param url 需要打开的目标 URL 字符串
+ * @description
+ * 1. 微信小程序：由于安全策略，无法直接打开外链，统一跳转至内部 Webview 页面承载。
+ * 2. App 端：调用系统底层接口（plus.runtime.openURL）使用系统默认浏览器打开。
+ * 3. H5 端：使用标准的 window.open 在新窗口中打开。
+ */
+export const openExternalUrl = (url: string) => {
+  if (!url) return
+  
+  // 微信小程序处理逻辑
+  // #ifdef MP-WEIXIN
+  uni.navigateTo({ url: `/pages/webview/webview?url=${encodeURIComponent(url)}` })
+  // #endif
+  
+  // App (iOS/Android) 处理逻辑
+  // #ifdef APP-PLUS
+  plus.runtime.openURL(url)
+  // #endif
+  
+  // H5 网页处理逻辑
+  // #ifdef H5
+  window.open(url)
+  // #endif
+}

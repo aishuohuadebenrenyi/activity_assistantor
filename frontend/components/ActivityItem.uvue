@@ -26,6 +26,16 @@
 </template>
 
 <script>
+	/**
+	 * 活动列表项组件。
+	 *
+	 * Props：
+	 * - activity：Activity 展示模型（来自 store/index.uts 的转换）
+	 *
+	 * 事件：
+	 * - click(activityId)：点击整行进入详情
+	 * - share(activityId)：点击分享按钮触发分享流程
+	 */
 	export default {
 		props: {
 			activity: {

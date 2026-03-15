@@ -1,9 +1,33 @@
 export type Config = {
+  /**
+   * 后端 API 基地址（需包含 /api 前缀）。
+   * - 本地开发：通常是 http://<电脑局域网IP>:9000/api（真机调试不要用 localhost）
+   * - 生产环境：建议使用 HTTPS，并由网关/反向代理统一管理域名与证书
+   */
   BASE_URL: string;
+  /**
+   * 网络请求超时时间（毫秒）。
+   */
   TIMEOUT: number;
+  /**
+   * 本地数据加密密钥（示例占位）。
+   * 注意：不要在仓库中存放真实密钥；生产环境请走安全配置注入。
+   */
   ENCRYPTION_KEY: string;
+  /**
+   * 是否启用全局 Mock。
+   * - true：所有请求走 mock/index.uts，不访问后端
+   * - false：走真实后端 API
+   */
   USE_MOCK: boolean;
+  /**
+   * 启动时是否清空缓存（用于演示“首次启动/首次登录”流程）。
+   */
   CLEAR_CACHE_ON_START: boolean;
+  /**
+   * 隐私政策与用户协议的访问地址（合规要求）。
+   * 通常由后端提供静态页面或由官网承载。
+   */
   PRIVACY_POLICY_URL: string;
   USER_AGREEMENT_URL: string;
 }

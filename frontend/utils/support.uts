@@ -1,0 +1,29 @@
+import { config } from './config.uts'
+import { request, RequestOptions } from './request.uts'
+import { openExternalUrl, getClientPlatform } from '@/adapters/platform.uts'
+
+export const openSupport = async (scene: string = 'unknown') => {
+  /**
+   * 打开客服入口（需要后端配置 CUSTOMER_SERVICE_URL）。
+   *
+   * 参数：
+   * - scene: 进入客服的来源场景标识，用于后端留痕/统计（如 profile/feedback/activity_detail）
+   *
+   * 行为：
+   * - Mock 模式下仅提示不启用；
+   * - 真实模式下请求 /support/entry 获取客服链接，再按平台策略打开外链。
+   */
+  if (config.USE_MOCK) {
+    uni.showToast({ title: '客服入口未开启（Mock模式）', icon: 'none' })
+    return
+  }
+
+  const platform = getClientPlatform()
+  const res = await request<any>(new RequestOptions(`/support/entry?scene=${encodeURIComponent(scene)}&platform=${platform}`, 'GET'))
+  const url = (res as any).customer_service_url as string
+  if (!url) {
+    uni.showToast({ title: '客服入口未配置', icon: 'none' })
+    return
+  }
+  openExternalUrl(url)
+}

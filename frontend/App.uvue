@@ -1,7 +1,15 @@
 
 <script>
+	/**
+	 * 全局应用生命周期管理。
+	 *
+	 * 主要职责：
+	 * - 启动时从本地恢复活动/用户状态；
+	 * - 监听网络变化，驱动离线队列重放与埋点上报；
+	 * - 捕获全局错误并进行轻量提示（避免用户无感知崩溃）。
+	 */
 	import { setOnlineStatus, loadFromStorage } from '@/store/index.uts'
-	import { logEvent } from '@/utils/analytics.uts'
+	import { logEvent, flushEvents } from '@/utils/analytics.uts'
 	import { processQueue } from '@/utils/request.uts'
 	import { config } from '@/utils/config.uts'
 
@@ -34,6 +42,7 @@
 					
 					if (isOnline) {
 						processQueue();
+						flushEvents();
 					}
 				}
 			});
@@ -56,6 +65,7 @@
 					});
 					// 触发离线队列同步
 					processQueue();
+					flushEvents();
 				}
 				logEvent('network_change', { isConnected: isConnected, networkType: res.networkType });
 			});

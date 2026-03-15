@@ -1,0 +1,49 @@
+import { config } from './config.uts'
+import { request, RequestOptions } from './request.uts'
+
+const KEY = 'entitlements_cache_v1'
+
+export type Entitlements = Record<string, any>
+
+export const loadEntitlementsCache = (): Entitlements => {
+  /**
+   * 读取本地缓存的权益集合。
+   *
+   * 返回：
+   * - Entitlements：键值对（如 {"export.enabled": true}）
+   */
+  try {
+    const v = uni.getStorageSync(KEY)
+    if (v != null) return v as Entitlements
+  } catch (e) {}
+  return {} as Entitlements
+}
+
+export const refreshEntitlements = async (): Promise<Entitlements> => {
+  /**
+   * 从后端刷新权益集合并写入本地缓存。
+   *
+   * 返回：
+   * - Entitlements：最新权益键值对
+   */
+  if (config.USE_MOCK) return loadEntitlementsCache()
+  const res = await request<any>(new RequestOptions('/billing/me/entitlements', 'GET'))
+  const ents = ((res as any).entitlements ?? {}) as Entitlements
+  try {
+    uni.setStorageSync(KEY, ents)
+  } catch (e) {}
+  return ents
+}
+
+export const hasEntitlement = (key: string, ents: Entitlements | null = null): boolean => {
+  /**
+   * 判断是否具备某项权益（容忍 bool/number/string 的后端输出）。
+   *
+   * 参数：
+   * - key: 权益键
+   * - ents: 可选，传入已获取的权益集合以避免重复读缓存
+   */
+  const e = ents ?? loadEntitlementsCache()
+  const v = (e as any)[key]
+  return v === true || v === 1 || v === 'true'
+}

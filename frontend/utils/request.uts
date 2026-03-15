@@ -4,6 +4,8 @@ import { networkState } from './network_state.uts'
 import { addToQueue, getQueue, saveQueue, QueueItem } from './offline_queue.uts'
 import { RequestOptions } from './api_types.uts'
 import { handleMockRequest } from '@/mock/index.uts'
+import { generateIdempotencyKey } from './idempotency.uts'
+import { getClientPlatform } from '@/adapters/platform.uts'
 
 // 重新导出，方便其他文件引用
 export { RequestOptions } from './api_types.uts'
@@ -16,28 +18,57 @@ let isProcessingQueue = false
  * @param options 请求选项
  */
 export const request = async <T>(options: RequestOptions): Promise<T> => {
+  /**
+   * 统一网络请求入口。
+   *
+   * Header 注入策略：
+   * - Content-Type: application/json（默认）
+   * - Authorization: Bearer <token>（若本地存在 user_data.token）
+   * - X-Client-Platform: 平台标识（用于后端兼容与统计）
+   * - X-App-Version: App 版本（可选，尽力从系统信息读取）
+   * - Idempotency-Key: 非 GET 自动注入（用于后端幂等与离线队列重放）
+   *
+   * 离线队列策略：
+   * - 当设备离线且请求为非 GET 且未设置 skipQueue 时，写入离线队列并抛出 OFFLINE_QUEUED；
+   * - 网络恢复后由 processQueue() 逐条重放。
+   *
+   * 鉴权失败策略：
+   * - 401 默认触发 reLaunch 到登录页；
+   * - 若 header 携带 X-Skip-Auth-Redirect=1，则不跳转（用于埋点/静默请求避免循环）。
+   */
   // 全局 Mock 拦截
   if (config.USE_MOCK) {
     return await handleMockRequest<T>(options.url, options.method, options.data);
   }
 
   return new Promise<T>((resolve, reject) => {
+    const fullUrl = config.BASE_URL + options.url
+    
+    // 获取 Token
+    const userData = uni.getStorageSync('user_data');
+    const header = (options.header ?? {}) as any
+    if (header['Content-Type'] == null) header['Content-Type'] = 'application/json'
+    if (userData != null && (userData as any).token != null) {
+      header['Authorization'] = `Bearer ${(userData as any).token}`;
+    }
+    if (header['X-Client-Platform'] == null) header['X-Client-Platform'] = getClientPlatform()
+    if (header['X-App-Version'] == null) {
+      try {
+        const sys = uni.getSystemInfoSync()
+        const v = (sys as any).appVersion
+        if (v != null) header['X-App-Version'] = v as string
+      } catch (e) {}
+    }
+    if (options.method !== 'GET' && header['Idempotency-Key'] == null) {
+      header['Idempotency-Key'] = generateIdempotencyKey()
+    }
+    options.header = header
+
     // 检查是否离线且非 GET 请求
     if (!networkState.isOnline && options.method !== 'GET' && !options.skipQueue) {
        addToQueue(options)
        reject(new Error('OFFLINE_QUEUED'))
        return
-    }
-
-    const fullUrl = config.BASE_URL + options.url
-    
-    // 获取 Token
-    const userData = uni.getStorageSync('user_data');
-    const header = options.header ?? {
-      'Content-Type': 'application/json'
-    };
-    if (userData != null && (userData as any).token != null) {
-      header['Authorization'] = `Bearer ${(userData as any).token}`;
     }
     
     uni.request({
@@ -51,6 +82,10 @@ export const request = async <T>(options: RequestOptions): Promise<T> => {
           // 尝试转换数据类型
           resolve(res.data as T)
         } else if (res.statusCode === 401) {
+          if ((options.header as any)?.['X-Skip-Auth-Redirect'] == '1') {
+            reject(new Error('Unauthorized'))
+            return
+          }
           // Token 过期或未登录
           uni.showToast({ title: '登录已过期，请重新登录', icon: 'none' })
           uni.reLaunch({ url: '/pages/auth/login' })

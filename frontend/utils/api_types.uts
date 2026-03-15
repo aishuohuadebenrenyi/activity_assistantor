@@ -1,11 +1,47 @@
 
+/**
+ * API 请求与响应相关的类型定义
+ * 
+ * 本文件定义了前端网络层统一使用的各类数据结构，确保在请求发送、
+ * 离线队列存储以及业务逻辑调用之间保持一致的类型约束。
+ */
+
 export class RequestOptions {
-  url: string
-  method: string
-  data: any | null
-  header: any | null
-  skipQueue: boolean // 新增字段：是否跳过离线队列（用于队列重试时）
+  /**
+   * 标准化的请求选项对象（供 request.uts 统一处理）。
+   *
+   * 设计目标：
+   * - 统一承载网络请求所需的 URL、方法、数据和请求头。
+   * - 支持离线队列重放机制，确保弱网环境下数据不丢失。
+   * - 通过 skipQueue 标志位解决“队列重放递归入队”问题。
+   */
   
+  // 请求目标的完整 URL 路径
+  url: string
+  
+  // HTTP 请求方法，如 'GET', 'POST', 'PUT', 'DELETE'
+  method: string
+  
+  // 请求负载数据（对于 POST/PUT 请求通常为 JSON 对象）
+  data: any | null
+  
+  // 自定义请求头，如 Authorization, Content-Type, Idempotency-Key
+  header: any | null
+  
+  // 是否跳过离线队列。
+  // 设置为 true 时，若请求失败将不会进入 offline_queue 队列进行自动重试。
+  // 常用于：1. 队列自身的重放请求；2. 某些对实时性要求极高且重试无意义的请求（如心跳）。
+  skipQueue: boolean
+  
+  /**
+   * 构造函数
+   * 
+   * @param url 请求路径
+   * @param method HTTP 方法，默认为 GET
+   * @param data 请求参数，默认为空
+   * @param header 请求头，默认为空
+   * @param skipQueue 是否跳过离线处理，默认为 false
+   */
   constructor(url: string, method: string = 'GET', data: any | null = null, header: any | null = null, skipQueue: boolean = false) {
     this.url = url
     this.method = method

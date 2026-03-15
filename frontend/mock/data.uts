@@ -1,6 +1,14 @@
 
 import { Activity } from '@/store/types.uts'
 
+/**
+ * Mock 数据集合。
+ *
+ * 约定：
+ * - MOCK_ACTIVITIES 采用“后端返回的 ActivityResponse 形态”，用于复用 store/index.uts 的 mapBackendToFrontend 转换逻辑；
+ * - MOCK_USER 采用后端登录接口返回的 user 形态。
+ */
+
 // 这里的 MOCK_ACTIVITIES 使用的是后端返回的 ActivityResponse 格式，以便 mapBackendToFrontend 能够正常处理
 export const MOCK_ACTIVITIES: any[] = [
     {

@@ -1,10 +1,100 @@
+import { config } from './config.uts'
+import { request, RequestOptions } from './request.uts'
+import { getClientPlatform } from '@/adapters/platform.uts'
+
 export type EventParams = any;
 
+type BufferedEvent = {
+  event_name: string
+  properties: any | null
+  timestamp: string
+  platform: string
+}
+
+const BUFFER_KEY = 'analytics_event_buffer_v1'
+
+const loadBuffer = (): BufferedEvent[] => {
+  /**
+   * 从本地存储读取埋点缓冲区。
+   *
+   * 兼容性说明：
+   * - uni.getStorageSync 可能返回 string/array/其它类型；
+   * - 为避免出现 `buf.push is not a function`，这里对类型做严格保护并在异常时降级为空数组。
+   */
+  try {
+    const v = uni.getStorageSync(BUFFER_KEY)
+    if (v == null) return [] as BufferedEvent[]
+    const anyV = v as any
+    if (typeof anyV === 'string') {
+      if (anyV.length === 0) return [] as BufferedEvent[]
+      try {
+        const parsed = JSON.parse(anyV)
+        if (Array.isArray(parsed)) return parsed as BufferedEvent[]
+      } catch (e) {}
+      return [] as BufferedEvent[]
+    }
+    if (Array.isArray(anyV)) return anyV as BufferedEvent[]
+  } catch (e) {}
+  return [] as BufferedEvent[]
+}
+
+const saveBuffer = (events: BufferedEvent[]) => {
+  /**
+   * 保存埋点缓冲区到本地存储。
+   *
+   * 参数：
+   * - events: 待保存的事件数组
+   */
+  try {
+    uni.setStorageSync(BUFFER_KEY, events)
+  } catch (e) {}
+}
+
 export const logEvent = (eventName: string, params: EventParams | null = null) => {
-  const timestamp = new Date().toISOString();
-  // 开发环境下打印日志
-  console.log(`[Analytics] ${eventName} at ${timestamp}`, params);
-  
-  // 简单的本地存储策略，实际生产环境应批量上传
-  // 这里作为示例，暂不实现复杂的队列上传逻辑，仅预留位置
+  /**
+   * 记录一次埋点事件（写入本地缓冲，并尝试触发上报）。
+   *
+   * 参数：
+   * - eventName: 事件名（建议使用稳定的英文 snake/camel 命名）
+   * - params: 事件属性（任意 JSON 对象，避免放敏感信息）
+   *
+   * 保护策略：
+   * - try/catch 包裹，避免在全局 onError 中记录埋点时形成递归错误链。
+   */
+  try {
+    const timestamp = new Date().toISOString()
+    console.log(`[Analytics] ${eventName} at ${timestamp}`, params)
+    const buf = loadBuffer()
+    buf.push({
+      event_name: eventName,
+      properties: params,
+      timestamp,
+      platform: getClientPlatform(),
+    } as BufferedEvent)
+    if (buf.length > 200) buf.splice(0, buf.length - 200)
+    saveBuffer(buf)
+    flushEvents()
+  } catch (e) {}
+}
+
+export const flushEvents = async () => {
+  /**
+   * 将本地缓冲区事件分批上报到后端。
+   *
+   * 批策略：
+   * - 每次最多上报 20 条；
+   * - 成功后从缓冲区移除已上报部分。
+   *
+   * 鉴权策略：
+   * - 上报请求带 X-Skip-Auth-Redirect=1，避免 401 触发登录跳转造成循环。
+   */
+  if (config.USE_MOCK) return
+  const buf = loadBuffer()
+  if (buf.length === 0) return
+
+  const batch = buf.slice(0, 20)
+  try {
+    await request(new RequestOptions('/analytics/events/batch', 'POST', { events: batch }, { 'X-Skip-Auth-Redirect': '1' }, true))
+    saveBuffer(buf.slice(batch.length))
+  } catch (e) {}
 }

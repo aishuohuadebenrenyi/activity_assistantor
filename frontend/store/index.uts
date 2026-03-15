@@ -1,4 +1,18 @@
 
+/**
+ * 全局业务 Store（活动/用户/网络状态）。
+ *
+ * 职责：
+ * - 维护 activitiesState（页面读取的响应式数据源）；
+ * - 封装与后端交互的核心动作（拉取活动、创建/更新/删除、注销、举报）；
+ * - 负责把后端数据模型（ActivityResponse 等）映射为前端展示模型（Activity 等）；
+ * - 在离线场景下做乐观更新，并配合 request.uts 的离线队列机制实现“先写本地、后重放同步”。
+ *
+ * 注意：
+ * - 当前项目同时支持 Mock 与真实后端（由 config.USE_MOCK 控制）；
+ * - 离线创建活动时会给临时对象分配负数 ID，避免 UI 依赖 id 时崩溃（后续可扩展为 syncStatus 状态机）。
+ */
+
 import { reactive } from 'vue'
 import { request, RequestOptions } from '@/utils/request.uts'
 import { logEvent } from '@/utils/analytics.uts'
@@ -31,6 +45,13 @@ const STORAGE_KEY = 'activities_data';
 const USER_KEY = 'user_data';
 
 export const saveToStorage = () => {
+  /**
+   * 将活动列表与用户信息持久化到本地存储。
+   *
+   * 存储键：
+   * - activities_data：活动列表（用于离线浏览）
+   * - user_data：登录态与用户信息（供 request.uts 注入 token）
+   */
   try {
     uni.setStorageSync(STORAGE_KEY, activitiesState.activities);
     if (activitiesState.user != null) {
@@ -44,6 +65,13 @@ export const saveToStorage = () => {
 };
 
 export const loadFromStorage = () => {
+  /**
+   * 从本地存储恢复活动列表与用户信息。
+   *
+   * 使用场景：
+   * - App 启动/冷启动时恢复上次状态；
+   * - 配合离线模式展示内容。
+   */
   try {
     const data = uni.getStorageSync(STORAGE_KEY);
     if (data != null) {
@@ -63,6 +91,12 @@ export const loadFromStorage = () => {
 };
 
 export const setOnlineStatus = (status: boolean) => {
+  /**
+   * 设置在线状态（同时同步到 utils/network_state）。
+   *
+   * 参数：
+   * - status: true 在线；false 离线
+   */
   activitiesState.isOnline = status;
   setNetworkStatus(status);
 };
@@ -103,6 +137,14 @@ type ActivityResponse = {
 
 // 数据转换：后端 Model -> 前端 ViewModel
 function mapBackendToFrontend(data: ActivityResponse): Activity {
+  /**
+   * 将后端 ActivityResponse 转换为前端 Activity 展示模型。
+   *
+   * 转换点：
+   * - start_time（ISO）拆分为 date/time 字段；
+   * - checkin_records 补齐 name/phone（通过 registrations 关联）；
+   * - participants/checkins/views 等统计字段做前端友好映射。
+   */
   const dt = new Date(data.start_time);
   const dateStr = `${dt.getFullYear()}-${(dt.getMonth()+1).toString().padStart(2, '0')}-${dt.getDate().toString().padStart(2, '0')}`;
   const timeStr = `${dt.getHours().toString().padStart(2, '0')}:${dt.getMinutes().toString().padStart(2, '0')}`;
@@ -159,6 +201,16 @@ function mapBackendToFrontend(data: ActivityResponse): Activity {
 }
 
 export const fetchActivities = async () => {
+  /**
+   * 拉取活动列表并写入 store（页面 onShow 时调用）。
+   *
+   * 返回：
+   * - Promise<void>
+   *
+   * 错误处理：
+   * - Mock 模式下由 mock/index.uts 返回数据；
+   * - 真实后端失败时写入 error 供 UI 提示。
+   */
   activitiesState.isLoading = true;
   activitiesState.error = '';
   
@@ -178,6 +230,13 @@ export const fetchActivities = async () => {
 };
 
 export const addActivity = async (activity: Activity): Promise<Activity> => {
+  /**
+   * 创建活动（乐观更新 + 离线入队）。
+   *
+   * 离线策略：
+   * - 若 request() 抛出 OFFLINE_QUEUED，则不回滚本地新增；
+   * - 由于后端尚未返回真实 id，这里会分配负数临时 id 以便 UI 可继续工作。
+   */
   // 乐观更新：先添加到本地
   activitiesState.activities.push(activity);
   
@@ -226,6 +285,13 @@ export const addActivity = async (activity: Activity): Promise<Activity> => {
 };
 
 export const updateActivity = async (activity: Activity): Promise<Activity> => {
+  /**
+   * 更新活动（乐观更新 + 离线入队）。
+   *
+   * 离线策略：
+   * - OFFLINE_QUEUED 时保留本地修改并落盘；
+   * - 在线失败则回滚到旧值。
+   */
   const index = activitiesState.activities.findIndex(a => a.id === activity.id);
   if (index === -1) {
     throw new Error('Activity not found');
@@ -268,6 +334,13 @@ export const updateActivity = async (activity: Activity): Promise<Activity> => {
 };
 
 export const deleteActivity = async (id: number) => {
+  /**
+   * 删除活动（乐观删除 + 离线入队）。
+   *
+   * 离线策略：
+   * - OFFLINE_QUEUED 时保留本地删除并落盘；
+   * - 在线失败则回滚恢复。
+   */
   const index = activitiesState.activities.findIndex(a => a.id === id);
   if (index === -1) return;
   
@@ -292,6 +365,16 @@ export const deleteActivity = async (id: number) => {
 };
 
 export const deleteUserAccount = async (force: boolean = false): Promise<any> => {
+  /**
+   * 发起账号注销流程（符合冷静期规则）。
+   *
+   * 参数：
+   * - force: 是否表示“冷静期内二次确认”（前端语义预留）
+   *
+   * 注意：
+   * - 当前后端注销接口以“重复调用”作为二次确认触发条件；
+   * - 若要严格按 force 控制，需后端读取该字段并做分支处理（见文档同步部分）。
+   */
   try {
     // force 为 true 时表示在冷静期内的第二次确认，执行最终注销
     const res = await request<any>(new RequestOptions('/user/account', 'DELETE', { force: force }));
@@ -318,6 +401,14 @@ export const deleteUserAccount = async (force: boolean = false): Promise<any> =>
 };
 
 export const reportContent = async (targetType: string, targetId: number, reason: string) => {
+  /**
+   * 举报内容（能力占位）。
+   *
+   * 参数：
+   * - targetType: 举报目标类型（activity/user）
+   * - targetId: 目标 ID
+   * - reason: 举报原因
+   */
   try {
     const payload = {
       target_type: targetType,

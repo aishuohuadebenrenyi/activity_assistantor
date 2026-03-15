@@ -1,5 +1,9 @@
 
 export interface CheckinRecord {
+  /**
+   * 签到记录（前端展示模型）。
+   * 注意：该结构来自后端 checkin_records + registrations 的组合映射（见 store/index.uts）。
+   */
   id: number;
   name: string;
   phone: string;
@@ -7,6 +11,10 @@ export interface CheckinRecord {
 }
 
 export interface Registration {
+  /**
+   * 报名记录（前端展示模型）。
+   * checkedIn 与后端计算字段保持一致，便于列表快速展示状态。
+   */
   id: number;
   name: string;
   phone: string;
@@ -15,6 +23,10 @@ export interface Registration {
 }
 
 export interface Activity {
+  /**
+   * 活动（前端展示模型）。
+   * 由后端 ActivityResponse 转换而来（见 store/index.uts 的 mapBackendToFrontend）。
+   */
   id: number;
   name: string;
   type: string;

@@ -1,3 +1,11 @@
+"""
+法务页面（静态 HTML）可用性测试。
+
+目的：
+- 确保隐私政策与用户协议页面在后端路由下可正常访问；
+- 用于满足平台合规检查与回归验证。
+"""
+
 import pytest
 from backend.app import create_app
 

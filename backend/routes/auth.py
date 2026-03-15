@@ -1,3 +1,17 @@
+"""
+认证与登录相关 API。
+
+路由前缀：/api/auth
+
+支持两种登录方式：
+- 手机号 + 短信验证码；
+- 微信登录（通过 code 换取 openid）。
+
+注意：
+- 当前验证码缓存与发送频控为内存字典实现，仅适用于单进程开发/演示环境；
+- 生产环境应替换为 Redis 等带 TTL 的持久化缓存，并结合网关/风控做更强防刷。
+"""
+
 from flask import Blueprint, request, jsonify, current_app
 from ..models import db, User
 from ..config import Config
@@ -15,6 +29,23 @@ sms_last_sent = {} # {phone: timestamp}
 
 @auth_bp.route('/login', methods=['POST'])
 def login():
+    """
+    手机号验证码登录/注册。
+
+    Body（JSON）：
+    - phone: 手机号
+    - code: 验证码（开发/测试允许使用 123456 作为兜底）
+
+    业务规则：
+    - 用户不存在则自动创建；
+    - 若用户处于 pending_deletion 冷静期，登录会自动恢复账号为 active；
+    - 登录成功签发 JWT（7 天有效）。
+
+    返回：
+    - 200: {token, user}
+    - 400: 参数缺失
+    - 401: 验证码错误
+    """
     data = request.get_json()
     phone = data.get('phone')
     code = data.get('code')
@@ -54,6 +85,23 @@ def login():
 
 @auth_bp.route('/login/wechat', methods=['POST'])
 def login_wechat():
+    """
+    微信登录（小程序/APP 的 code 换取 openid）。
+
+    Body（JSON）：
+    - code: 微信登录 code
+
+    业务规则：
+    - 通过微信接口换取 openid；
+    - openid 未绑定用户则创建用户；
+    - pending_deletion 冷静期同样会被登录动作恢复为 active；
+    - 成功后签发 JWT（7 天有效）。
+
+    返回：
+    - 200: {token, user}
+    - 400: 缺少 code
+    - 401: 微信授权失败
+    """
     data = request.get_json()
     code = data.get('code')
     
@@ -89,6 +137,22 @@ def login_wechat():
 
 @auth_bp.route('/send-code', methods=['POST'])
 def send_code():
+    """
+    发送短信验证码（带基础防刷）。
+
+    Body（JSON）：
+    - phone: 目标手机号
+
+    防刷规则（当前实现）：
+    - 同一手机号 60 秒内仅允许发送一次；
+    - 缓存写入 sms_code_cache/sms_last_sent（进程内存）。
+
+    返回：
+    - 200: 发送成功
+    - 400: 未提供手机号
+    - 429: 发送过于频繁
+    - 500: 第三方短信发送失败
+    """
     data = request.get_json()
     phone = data.get('phone')
     

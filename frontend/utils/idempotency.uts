@@ -1,0 +1,30 @@
+const IDEM_COUNTER_KEY = 'idem_counter_v1'
+
+export const generateIdempotencyKey = (): string => {
+  /**
+   * 生成幂等键（Idempotency-Key）。
+   *
+   * 设计目标：
+   * - 在同一设备上尽量保证唯一；
+   * - 低成本生成，不依赖额外库；
+   * - 适配离线队列：同一写请求在重放时应复用同一 key（由 request.uts 保持 header）。
+   *
+   * 组成：
+   * - 当前时间戳（ms）
+   * - 本地自增计数器（持久化）
+   * - 随机串（降低并发碰撞概率）
+   */
+  let counter = 0
+  try {
+    const v = uni.getStorageSync(IDEM_COUNTER_KEY)
+    if (v != null) counter = v as number
+  } catch (e) {}
+
+  counter = counter + 1
+  try {
+    uni.setStorageSync(IDEM_COUNTER_KEY, counter)
+  } catch (e) {}
+
+  const rand = Math.random().toString(16).slice(2)
+  return `${Date.now()}_${counter}_${rand}`
+}

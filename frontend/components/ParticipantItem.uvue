@@ -18,6 +18,15 @@
 </template>
 
 <script>
+	/**
+	 * 报名人员列表项组件。
+	 *
+	 * Props：
+	 * - participant：页面层组装的数据（name/phone/status/checkinTime）
+	 *
+	 * 事件：
+	 * - click(participant)：点击条目时抛出，供上层弹出操作菜单或查看详情
+	 */
 	export default {
 		props: {
 			participant: {

@@ -12,6 +12,15 @@ export type QueueItem = {
 const QUEUE_KEY = 'offline_request_queue'
 
 export const getQueue = (): QueueItem[] => {
+  /**
+   * 读取离线队列（本地持久化）。
+   *
+   * 返回：
+   * - QueueItem[]：按入队顺序排列的请求元数据数组（FIFO）。
+   *
+   * 注意：
+   * - uni.getStorageSync 的返回类型在 UTS 下需要谨慎处理；若出现类型不匹配，应做降级为空数组。
+   */
   try {
     const data = uni.getStorageSync(QUEUE_KEY)
     if (data != null) {
@@ -25,6 +34,12 @@ export const getQueue = (): QueueItem[] => {
 }
 
 export const saveQueue = (queue: QueueItem[]) => {
+  /**
+   * 写入离线队列到本地存储。
+   *
+   * 参数：
+   * - queue：待保存的队列数组
+   */
   try {
     uni.setStorageSync(QUEUE_KEY, queue)
   } catch (e) {
@@ -33,6 +48,17 @@ export const saveQueue = (queue: QueueItem[]) => {
 }
 
 export const addToQueue = (options: RequestOptions) => {
+  /**
+   * 将一次“写请求”加入离线队列。
+   *
+   * 入队条件由 request.uts 判断：
+   * - 非 GET
+   * - 当前离线
+   * - 且未设置 skipQueue
+   *
+   * 参数：
+   * - options：请求选项（会提取 url/method/data/header）
+   */
   const queue = getQueue()
   const item = {
     url: options.url,
@@ -54,6 +80,12 @@ export const addToQueue = (options: RequestOptions) => {
  * 监听网络变化，自动处理离线队列
  */
 export const setupNetworkListener = (processCallback: () => void) => {
+  /**
+   * 注册网络恢复监听器：当设备从离线变为在线时，触发队列重放回调。
+   *
+   * 参数：
+   * - processCallback：由上层传入的“处理队列”函数（通常是 request.uts 的 processQueue）
+   */
   uni.onNetworkStatusChange((res) => {
     if (res.isConnected) {
       console.log('Network is back, processing offline queue...');

@@ -6,5 +6,11 @@ export const networkState = reactive({
 })
 
 export const setNetworkStatus = (status: boolean) => {
+  /**
+   * 更新全局网络状态（供 request/页面展示/离线逻辑判断使用）。
+   *
+   * 参数：
+   * - status: true 在线；false 离线
+   */
   networkState.isOnline = status
 }

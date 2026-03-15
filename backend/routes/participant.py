@@ -1,6 +1,20 @@
+"""
+参与者相关 API（报名/名单/导出）。
+
+路由前缀：/api/activities
+
+说明：
+- 该 Blueprint 注册在 `/api/activities` 下，因此路由形如：
+  - GET  /api/activities/<activity_id>/participants
+  - POST /api/activities/<activity_id>/register
+  - POST /api/activities/<activity_id>/export
+- 写接口接入幂等，配合前端离线队列重放避免重复报名/重复导出请求。
+"""
+
 from flask import Blueprint, request, jsonify, current_app
 from ..models import db, Registration, CheckinRecord, Activity
 from ..utils.auth import auth_required
+from ..utils.idempotency import idempotent
 import csv
 import io
 
@@ -9,6 +23,17 @@ participant_bp = Blueprint('participant', __name__)
 @participant_bp.route('/<int:activity_id>/participants', methods=['GET'])
 @auth_required
 def get_participants(activity_id):
+    """
+    获取活动报名名单（仅组织者可访问）。
+
+    参数：
+    - activity_id: 活动 ID（路径参数）
+
+    返回：
+    - 200: 报名数组，包含签到状态与签到时间（若已签到）；
+    - 403: 非组织者无权限查看；
+    - 404: 活动不存在。
+    """
     # Ensure activity exists and user is organizer
     activity = Activity.query.get_or_404(activity_id)
     if activity.user_id != request.user.id:
@@ -31,7 +56,23 @@ def get_participants(activity_id):
 
 @participant_bp.route('/<int:activity_id>/register', methods=['POST'])
 @auth_required
+@idempotent
 def register(activity_id):
+    """
+    报名活动（需要登录）。
+
+    Body（JSON）：
+    - name: 报名人姓名（必填）
+    - phone: 报名人手机号（必填）
+
+    业务规则：
+    - 以 (activity_id, phone) 判断重复报名；重复则返回错误；
+    - 当前 Registration 模型未强制绑定 user_id，因此允许“代报名”或未实名场景。
+
+    返回：
+    - 201: 报名成功，返回 Registration；
+    - 400: 参数缺失或已报名。
+    """
     data = request.get_json()
     name = data.get('name')
     phone = data.get('phone')
@@ -52,7 +93,24 @@ def register(activity_id):
 
 @participant_bp.route('/<int:activity_id>/export', methods=['POST'])
 @auth_required
+@idempotent
 def export_participants(activity_id):
+    """
+    导出报名名单（仅组织者可访问）。
+
+    Body（JSON）：
+    - email: 接收导出的邮箱（必填）
+
+    当前实现说明：
+    - 以 CSV 格式生成内容；
+    - 发送邮件逻辑为 Mock（仅打印），用于演示“异步导出”交互；
+    - 对外响应使用 202 Accepted，表示请求已受理。
+
+    返回：
+    - 202: 请求已受理；
+    - 403/404: 权限或活动不存在；
+    - 400: 未提供邮箱。
+    """
     activity = Activity.query.get_or_404(activity_id)
     if activity.user_id != request.user.id:
         return jsonify({'error': '没有权限导出报名名单'}), 403
