@@ -54,9 +54,9 @@
 							<text class="icon-text">🔍</text>
 						</view>
 						<!-- #ifndef MP-WEIXIN -->
-						<view id="create-btn-guide" class="primary-btn-small" @click="goToCreate" hover-class="hover-opacity">
-							<text class="icon-plus-small">+</text>
-							<text class="btn-text-small">新建</text>
+						<view id="create-btn-guide" class="btn btn-primary btn-sm btn-row" @click="goToCreate" hover-class="hover-opacity">
+							<text class="btn-icon-sm">+</text>
+							<text class="btn-text btn-text-sm">新建</text>
 						</view>
 						<!-- #endif -->
 					</view>
@@ -327,29 +327,6 @@
 		line-height: 1;
 	}
 
-	.primary-btn-small {
-		flex-direction: row;
-		align-items: center;
-		background-color: #007AFF;
-		padding: 4px 10px;
-		border-radius: 14px;
-		height: 28px;
-	}
-
-	.icon-plus-small {
-		color: #FFFFFF;
-		font-size: 14px;
-		font-weight: 700;
-		margin-right: 2px;
-		line-height: 1;
-	}
-
-	.btn-text-small {
-		color: #FFFFFF;
-		font-size: 12px;
-		font-weight: 600;
-	}
-
 	.scroll-content {
 		flex: 1;
 		padding: 16px 16px calc(16px + env(safe-area-inset-bottom));
@@ -455,15 +432,21 @@
 	}
 
 	.empty-action {
-		padding: 8px 14px;
+		padding: 0 24px;
 		background-color: #007AFF;
-		border-radius: 16px;
+		border-radius: 20px;
+		height: 40px;
+		justify-content: center;
+		align-items: center;
+		min-width: 120px;
 	}
 
 	.empty-action-text {
-		font-size: 13px;
+		font-size: 14px;
 		font-weight: 600;
 		color: #FFFFFF;
+		text-align: center;
+		line-height: 1;
 	}
 
 	.onboarding-mask {

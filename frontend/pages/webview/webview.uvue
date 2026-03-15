@@ -1,0 +1,48 @@
+<template>
+	<view class="container">
+		<!-- #ifdef MP-WEIXIN -->
+		<web-view v-if="src" :src="src"></web-view>
+		<!-- #endif -->
+		<!-- #ifndef MP-WEIXIN -->
+		<view class="fallback">
+			<text class="fallback-text">请在支持打开网页的环境中查看</text>
+		</view>
+		<!-- #endif -->
+	</view>
+</template>
+
+<script>
+	export default {
+		data() {
+			return {
+				src: ''
+			}
+		},
+		onLoad(options) {
+			const url = (options as any).url as string
+			if (url != null && url.length > 0) {
+				this.src = decodeURIComponent(url)
+			}
+		}
+	}
+</script>
+
+<style scoped>
+	.container {
+		flex: 1;
+		background-color: #F2F2F7;
+	}
+
+	.fallback {
+		flex: 1;
+		align-items: center;
+		justify-content: center;
+		padding: 24px;
+	}
+
+	.fallback-text {
+		font-size: 14px;
+		color: #8E8E93;
+		text-align: center;
+	}
+</style>

@@ -1,16 +1,10 @@
-from flask import Blueprint, request, jsonify
-from ..models import db, Activity, User
+from flask import Blueprint, request, jsonify, g
+from ..models import db, Activity, User, Registration, CheckinRecord, Report
 from ..services.wechat_service import WeChatService
+from ..utils.auth import auth_required
 from datetime import datetime
 
 activity_bp = Blueprint('activity', __name__)
-
-# Helper to get user_id from token (Mock for now, should use decorator)
-def get_current_user_id():
-    # In real implementation, parse 'Authorization' header
-    # auth_header = request.headers.get('Authorization')
-    # ... decode jwt ...
-    return 1 # Mock User ID 1
 
 @activity_bp.route('/', methods=['GET'])
 def get_activities():
@@ -26,24 +20,25 @@ def get_activities():
         query = query.filter(Activity.name.contains(search) | Activity.location.contains(search))
         
     activities = query.order_by(Activity.start_time.desc()).all()
-    return jsonify([a.to_dict() for a in activities])
+    # 列表页不返回报名详情，减少流量消耗且更安全
+    return jsonify([a.to_dict(include_registrations=False) for a in activities])
 
 @activity_bp.route('/', methods=['POST'])
+@auth_required
 def create_activity():
     data = request.get_json()
-    user_id = get_current_user_id()
+    user = request.user
     
-    # 微信内容安全校验 (Mock)
-    # 真实场景需调用微信 security.msgSecCheck 接口
-    # if not check_content_security(data['name'], data.get('description', '')):
-    #     return jsonify({'error': '内容包含违规信息'}), 400
+    # 微信内容安全校验
+    if not WeChatService.check_content_security(data['name'] + " " + data.get('description', '')):
+        return jsonify({'error': '内容包含违规信息'}), 400
     
     try:
         new_activity = Activity(
-            user_id=user_id,
+            user_id=user.id,
             name=data['name'],
             type=data.get('type', '其他'),
-            start_time=datetime.fromisoformat(data['date'] + 'T' + data['time']), # Assuming simple ISO format
+            start_time=datetime.fromisoformat(data['date'] + 'T' + data['time']),
             location=data.get('location'),
             description=data.get('description'),
             capacity=int(data.get('capacity', 0))
@@ -57,18 +52,57 @@ def create_activity():
 @activity_bp.route('/<int:id>', methods=['GET'])
 def get_activity(id):
     activity = Activity.query.get_or_404(id)
-    return jsonify(activity.to_dict())
+    
+    # 尝试获取当前用户以判断是否是组织者
+    auth_header = request.headers.get('Authorization')
+    is_organizer = False
+    if auth_header:
+        try:
+            from flask import current_app
+            import jwt
+            token = auth_header.split(" ")[1]
+            payload = jwt.decode(token, current_app.config['SECRET_KEY'], algorithms=['HS256'])
+            if payload['user_id'] == activity.user_id:
+                is_organizer = True
+        except:
+            pass
+            
+    # 如果不是组织者，脱敏显示报名人员手机号
+    return jsonify(activity.to_dict(mask_registrations=not is_organizer))
 
 @activity_bp.route('/<int:id>', methods=['PUT'])
+@auth_required
 def update_activity(id):
     activity = Activity.query.get_or_404(id)
+    
+    # Permission Check
+    if activity.user_id != request.user.id:
+        return jsonify({'error': '没有权限修改此活动'}), 403
+        
     data = request.get_json()
     
-    if 'name' in data: activity.name = data['name']
+    if 'name' in data: 
+        if not WeChatService.check_content_security(data['name']):
+            return jsonify({'error': '活动名称包含违规信息'}), 400
+        activity.name = data['name']
+        
     if 'location' in data: activity.location = data['location']
-    if 'description' in data: activity.description = data['description']
-    # Add other fields as needed
     
+    if 'description' in data: 
+        if not WeChatService.check_content_security(data['description']):
+            return jsonify({'error': '活动描述包含违规信息'}), 400
+        activity.description = data['description']
+        
+    if 'type' in data: activity.type = data['type']
+    if 'capacity' in data: activity.capacity = int(data['capacity'])
+    
+    # Handle date/time update
+    if 'date' in data and 'time' in data:
+        try:
+            activity.start_time = datetime.fromisoformat(data['date'] + 'T' + data['time'])
+        except ValueError:
+            return jsonify({'error': '日期格式错误'}), 400
+            
     db.session.commit()
     return jsonify(activity.to_dict())
 
@@ -76,17 +110,11 @@ def update_activity(id):
 def share_activity(id):
     activity = Activity.query.get_or_404(id)
     
-    # 1. Generate URL Link (https://wxaurl.cn/...)
-    # Path: Mini Program Page Path
-    # Query: Parameters
     url_link = WeChatService.generate_url_link(
         path="pages/activity/detail/detail",
         query=f"id={id}"
     )
     
-    # 2. Generate QRCode (Unlimited)
-    # Scene: id=123 (Max 32 chars)
-    # Page: Must be released page
     qrcode_data = WeChatService.get_unlimited_qrcode(
         scene=f"id={id}",
         page="pages/activity/detail/detail" 
@@ -94,48 +122,25 @@ def share_activity(id):
     
     return jsonify({
         "url_link": url_link,
-        "qrcode_data": qrcode_data, # Base64 string or URL
+        "qrcode_data": qrcode_data,
         "activity_name": activity.name,
         "activity_info": activity.to_dict()
     })
 
 @activity_bp.route('/<int:id>/my-ticket', methods=['GET'])
+@auth_required
 def get_my_ticket(id):
-    user_id = get_current_user_id()
-    # Find registration for this user and activity
-    # In a real app, you'd query Registration where user_id matches.
-    # Since Registration model currently stores 'name' and 'phone' but not direct user_id (it's a simplified model),
-    # we might need to mock this or assume the user can be found by phone if we had user phone.
-    # For this mock, we'll just return the first registration or a mock one if none exists.
-    
+    user = request.user
     activity = Activity.query.get_or_404(id)
-    from ..models import Registration
-    registration = Registration.query.filter_by(activity_id=id).first() # MOCK: Get first one
+    
+    # Find registration by phone (since Registration model is simple)
+    # In a real app, Registration would have a user_id.
+    registration = Registration.query.filter_by(activity_id=id, phone=user.phone).first()
     
     if not registration:
-        # Create a mock registration for demo purposes if none exists
-        if 'mock' in (request.args.get('mode') or ''):
-            pass 
-        else:
-            # Create a temporary mock registration object for display if database is empty
-            class MockReg:
-                id = 999
-                name = "测试用户"
-                phone = "13800000000"
-                checkin_record = None
-                created_at = datetime.utcnow()
-                def to_dict(self):
-                    return {
-                        'id': self.id,
-                        'name': self.name,
-                        'phone': self.phone,
-                        'checked_in': False
-                    }
-            registration = MockReg()
+        return jsonify({'error': '您尚未报名此活动'}), 404
 
-    # Generate a simple check-in code
-    # Format: "CHECKIN:activity_id:registration_id:timestamp"
-    # Base64 encode for safety
+    # Generate check-in code
     import base64
     import time
     
@@ -149,41 +154,48 @@ def get_my_ticket(id):
     })
 
 @activity_bp.route('/<int:id>/checkin', methods=['POST'])
+@auth_required
 def checkin_user(id):
+    # Only organizer can checkin others
+    activity = Activity.query.get_or_404(id)
+    if activity.user_id != request.user.id:
+        return jsonify({'error': '只有活动组织者可以进行签到操作'}), 403
+        
     data = request.get_json()
     qr_data = data.get('qr_data')
+    registration_id = data.get('registration_id')
     
-    if not qr_data:
-        return jsonify({'error': '缺少二维码数据'}), 400
+    if not qr_data and not registration_id:
+        return jsonify({'error': '缺少签到数据'}), 400
         
     try:
-        import base64
-        decoded = base64.b64decode(qr_data).decode('utf-8')
-        # Format: CHECKIN:activity_id:registration_id:timestamp
-        parts = decoded.split(':')
-        
-        if len(parts) != 4 or parts[0] != 'CHECKIN':
-             return jsonify({'error': '无效的二维码'}), 400
-             
-        aid = int(parts[1])
-        rid = int(parts[2])
-        
-        if aid != id:
-            return jsonify({'error': '非本活动的签到码'}), 400
+        rid = None
+        if qr_data:
+            import base64
+            decoded = base64.b64decode(qr_data).decode('utf-8')
+            parts = decoded.split(':')
             
-        from ..models import Registration
+            if len(parts) != 4 or parts[0] != 'CHECKIN':
+                 return jsonify({'error': '无效的二维码'}), 400
+                 
+            aid = int(parts[1])
+            rid = int(parts[2])
+            
+            if aid != id:
+                return jsonify({'error': '非本活动的签到码'}), 400
+        else:
+            rid = registration_id
+
         registration = Registration.query.get(rid)
-        if not registration:
+        if not registration or registration.activity_id != id:
             return jsonify({'error': '报名记录不存在'}), 404
             
         if registration.checkin_record:
             return jsonify({'message': '该用户已签到', 'user': registration.name, 'already_checked': True})
             
-        # Perform check-in
-        from ..models import CheckinRecord
         new_record = CheckinRecord(
             registration_id=rid,
-            activity_id=aid,
+            activity_id=id,
             checkin_time=datetime.utcnow()
         )
         db.session.add(new_record)
@@ -194,9 +206,36 @@ def checkin_user(id):
     except Exception as e:
         return jsonify({'error': f'签到失败: {str(e)}'}), 400
 
+@activity_bp.route('/<int:id>/report', methods=['POST'])
+@auth_required
+def report_activity(id):
+    activity = Activity.query.get_or_404(id)
+    data = request.get_json()
+    reason = data.get('reason')
+    user = request.user
+    
+    if not reason:
+        return jsonify({'error': '缺少举报原因'}), 400
+        
+    new_report = Report(
+        activity_id=id,
+        user_id=user.id,
+        reason=reason,
+        detail=data.get('detail', '')
+    )
+    db.session.add(new_report)
+    db.session.commit()
+    
+    return jsonify({'message': '举报已收到，我们会尽快处理', 'report_id': new_report.id})
+
 @activity_bp.route('/<int:id>', methods=['DELETE'])
+@auth_required
 def delete_activity(id):
     activity = Activity.query.get_or_404(id)
+    
+    if activity.user_id != request.user.id:
+        return jsonify({'error': '没有权限删除此活动'}), 403
+        
     db.session.delete(activity)
     db.session.commit()
     return jsonify({'message': 'Activity deleted'})

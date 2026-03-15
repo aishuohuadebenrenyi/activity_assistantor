@@ -35,9 +35,12 @@
 </template>
 
 <script lang="uts">
-import { activitiesState, Activity } from '@/store/index.uts'
+import { activitiesState, Activity, fetchActivities } from '@/store/index.uts'
 
 export default {
+  onShow() {
+    fetchActivities();
+  },
   computed: {
     activities(): Activity[] {
       // Mock filter: show all for demo

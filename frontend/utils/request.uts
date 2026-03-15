@@ -3,6 +3,7 @@ import { config } from './config.uts'
 import { networkState } from './network_state.uts'
 import { addToQueue, getQueue, saveQueue, QueueItem } from './offline_queue.uts'
 import { RequestOptions } from './api_types.uts'
+import { handleMockRequest } from '@/mock/index.uts'
 
 // 重新导出，方便其他文件引用
 export { RequestOptions } from './api_types.uts'
@@ -14,7 +15,12 @@ let isProcessingQueue = false
  * 集成了离线队列机制：当网络不可用且非 GET 请求时，自动加入队列等待恢复
  * @param options 请求选项
  */
-export const request = <T>(options: RequestOptions): Promise<T> => {
+export const request = async <T>(options: RequestOptions): Promise<T> => {
+  // 全局 Mock 拦截
+  if (config.USE_MOCK) {
+    return await handleMockRequest<T>(options.url, options.method, options.data);
+  }
+
   return new Promise<T>((resolve, reject) => {
     // 检查是否离线且非 GET 请求
     if (!networkState.isOnline && options.method !== 'GET' && !options.skipQueue) {
@@ -25,13 +31,20 @@ export const request = <T>(options: RequestOptions): Promise<T> => {
 
     const fullUrl = config.BASE_URL + options.url
     
+    // 获取 Token
+    const userData = uni.getStorageSync('user_data');
+    const header = options.header ?? {
+      'Content-Type': 'application/json'
+    };
+    if (userData != null && (userData as any).token != null) {
+      header['Authorization'] = `Bearer ${(userData as any).token}`;
+    }
+    
     uni.request({
       url: fullUrl,
       method: options.method as any,
       data: options.data,
-      header: options.header ?? {
-        'Content-Type': 'application/json'
-      },
+      header: header,
       timeout: config.TIMEOUT,
       success: (res) => {
         if (res.statusCode >= 200 && res.statusCode < 300) {

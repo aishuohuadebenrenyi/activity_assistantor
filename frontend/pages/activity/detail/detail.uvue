@@ -75,12 +75,14 @@
 					<text class="card-header-title">详细信息</text>
 					<view class="header-actions">
 						<!-- #ifndef MP-WEIXIN -->
-						<view class="header-action" @click="toggleEdit" hover-class="hover-opacity">
-							<text class="action-text">{{ isEditing ? '完成' : '编辑' }}</text>
-						</view>
+						<button class="btn btn-primary btn-sm" @click="toggleEdit" hover-class="hover-opacity" :aria-label="isEditing ? '完成编辑' : '编辑活动'">
+							<text class="btn-text btn-text-sm">{{ isEditing ? '完成' : '编辑' }}</text>
+						</button>
 						<!-- #endif -->
-						<view v-if="!isEditing" class="close-btn" @click="showDetail = false" hover-class="hover-opacity">
-							<text class="close-icon">×</text>
+						<view v-if="!isEditing" class="close-btn-wrapper">
+							<button class="btn btn-primary btn-sm" @click="showDetail = false" hover-class="hover-opacity" aria-label="关闭详情">
+								<text class="btn-text btn-text-sm">关闭</text>
+							</button>
 						</view>
 					</view>
 				</view>
@@ -111,8 +113,8 @@
 						<text class="label">活动介绍</text>
 						<textarea class="form-textarea" v-model="form.description" :readonly="!isEditing" :class="{'editable': isEditing}" />
 					</view>
-					<button v-if="isEditing" class="btn btn-primary" @click="saveChanges">
-						<text class="btn-text">保存修改</text>
+					<button v-if="isEditing" class="btn btn-primary btn-sm" @click="saveChanges">
+						<text class="btn-text btn-text-sm">保存修改</text>
 					</button>
 				</view>
 			</view>
@@ -137,15 +139,23 @@
 							</view>
 							<text class="tool-label-compact">分享</text>
 						</view>
+						<view class="tool-item-compact" @click="confirmDelete" hover-class="hover-opacity">
+							<view class="tool-icon-compact red-bg">
+								<text class="tool-icon">🗑️</text>
+							</view>
+							<text class="tool-label-compact">删除</text>
+						</view>
 					</view>
 				</view>
 			</view>
 			<!-- #endif -->
 			
-			<!-- 举报入口 (符合 App Store 审核要求) -->
+			<!-- #ifdef MP-WEIXIN -->
+			<!-- 举报入口 (小程序端合规要求) -->
 			<view class="report-section">
 				<text class="report-text" @click="onReport">举报此活动</text>
 			</view>
+			<!-- #endif -->
 			</view>
 		</scroll-view>
 		<!-- #ifdef MP-WEIXIN -->
@@ -160,14 +170,15 @@
 </template>
 
 <script>
-	import { activitiesState, updateActivity, Activity } from '@/store/index.uts'
+	import { activitiesState, updateActivity, Activity, deleteActivity } from '@/store/index.uts'
 	import { logEvent } from '@/utils/analytics.uts'
+	import { request, RequestOptions } from '@/utils/request.uts'
 
 	export default {
 		data() {
 			return {
 				activityId: 0,
-				showDetail: true,
+				showDetail: false,
 				isEditing: false,
 				form: {
 					name: '',
@@ -257,20 +268,31 @@
 					logEvent('detail_edit_click', { id: this.activityId });
 				}
 			},
-			saveChanges() {
+			async saveChanges() {
 				if (!this.isActivityValid) {
 					uni.showToast({ title: '活动状态异常', icon: 'none' });
 					return;
 				}
+				
+				uni.showLoading({ title: '正在保存...' });
+				
 				const updatedActivity = {
 					...this.activity,
 					...this.form,
 					capacity: this.form.capacity
 				} as Activity;
-				updateActivity(updatedActivity);
-				this.isEditing = false;
-				uni.showToast({ title: '保存成功' });
-				logEvent('detail_edit_save', { id: this.activityId });
+				
+				try {
+					await updateActivity(updatedActivity);
+					this.isEditing = false;
+					uni.showToast({ title: '保存成功' });
+					logEvent('detail_edit_save', { id: this.activityId });
+				} catch (e) {
+					// Error handled by request util
+					console.error('Save failed', e);
+				} finally {
+					uni.hideLoading();
+				}
 			},
 			goToParticipants() {
 				if (!this.isActivityValid) {
@@ -302,43 +324,104 @@
 				this.showDetail = !this.showDetail;
 				// #endif
 			},
+			confirmDelete() {
+				uni.showModal({
+					title: '删除活动',
+					content: '确定要删除此活动吗？此操作不可撤销。',
+					confirmColor: '#FF3B30',
+					success: async (res) => {
+						if (res.confirm) {
+							uni.showLoading({ title: '正在删除...' });
+							try {
+								await deleteActivity(this.activityId);
+								uni.hideLoading();
+								uni.showToast({ title: '已删除' });
+								setTimeout(() => {
+									uni.navigateBack();
+								}, 1000);
+							} catch (e) {
+								uni.hideLoading();
+								console.error('Delete failed', e);
+							}
+						}
+					}
+				});
+			},
 			// #ifdef MP-WEIXIN
             /**
-             * 参与活动
-             * 目前仅为 Mock 实现，模拟报名成功后的跳转。
-             * 真实场景应调用后端 /register 接口，并处理支付（如有）。
+             * 参与活动 (真实实现)
              */
 			joinActivity() {
+				const user = activitiesState.user;
+				if (user == null) {
+					uni.showModal({
+						title: '需要登录',
+						content: '报名活动前请先登录',
+						success: (res) => {
+							if (res.confirm) {
+								uni.navigateTo({ url: '/pages/auth/login' });
+							}
+						}
+					});
+					return;
+				}
+
+				uni.showModal({
+					title: '确认报名',
+					content: `确定报名参加《${this.activity.name}》吗？`,
+					success: (res) => {
+						if (res.confirm) {
+							this.performJoin();
+						}
+					}
+				});
+			},
+			async performJoin() {
 				uni.showLoading({ title: '报名中...' });
-				setTimeout(() => {
+				try {
+					const user = activitiesState.user!;
+					await request(new RequestOptions(`/activities/${this.activityId}/register`, 'POST', {
+						name: user.username || '微信用户',
+						phone: user.phone
+					}));
+					
 					uni.hideLoading();
 					uni.showToast({
 						title: '报名成功',
 						icon: 'success'
 					});
+					
 					setTimeout(() => {
-						// Redirect to ticket page
 						uni.navigateTo({
 							url: `/pages/activity/ticket/ticket?id=${this.activityId}`
 						});
 					}, 1500);
-				}, 1000);
+				} catch (e) {
+					uni.hideLoading();
+					console.error('Join failed', e);
+				}
 			},
 			// #endif
 			
 			onReport() {
+				const itemList = ['垃圾广告', '色情低俗', '违法违规', '欺诈信息', '其他'];
 				uni.showActionSheet({
-					itemList: ['垃圾广告', '色情低俗', '违法违规', '欺诈信息', '其他'],
-					success: (res) => {
+					itemList: itemList,
+					success: async (res) => {
+						const reason = itemList[res.tapIndex];
 						uni.showLoading({ title: '提交中...' });
-						// Mock 提交举报
-						setTimeout(() => {
+						
+						try {
+							await request(new RequestOptions(`/activities/${this.activityId}/report`, 'POST', { reason: reason }));
 							uni.hideLoading();
 							uni.showToast({
 								title: '举报已提交，我们会尽快处理',
 								icon: 'none'
 							});
-						}, 1000);
+						} catch (e) {
+							uni.hideLoading();
+							console.error('Report failed', e);
+						}
 					}
 				});
 			}
@@ -429,21 +512,13 @@
 		color: #8E8E93;
 	}
 
-	.header-action {
-		flex-direction: row;
-		align-items: center;
-		padding: 4px 8px;
-	}
-
 	.header-actions {
 		flex-direction: row;
 		align-items: center;
 	}
 
-	.action-text {
-		color: #007AFF;
-		font-size: 14px;
-		font-weight: 500;
+	.header-actions .btn {
+		margin-right: var(--spacing-s);
 	}
 
 	.activity-info-card {
@@ -517,14 +592,8 @@
 		margin-bottom: 16px;
 	}
 
-	.close-btn {
-		padding: 4px;
-	}
-
-	.close-icon {
-		font-size: 20px;
-		color: #C7C7CC;
-		line-height: 1;
+	.close-btn-wrapper {
+		margin-left: var(--spacing-s);
 	}
 
 	.form-group {
@@ -590,6 +659,7 @@
 
 	.blue-bg { background-color: rgba(0, 122, 255, 0.1); }
 	.orange-bg { background-color: rgba(255, 149, 0, 0.1); }
+	.red-bg { background-color: rgba(255, 59, 48, 0.1); }
 
 	.tool-icon {
 		font-size: 20px;

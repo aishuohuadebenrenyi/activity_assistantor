@@ -7,7 +7,7 @@
 	"uni-app-x": {},
 	"quickapp": {},
 	"mp-weixin": {
-		"appid": "wx_mock_appid_123456",
+		"appid": "wx1234567890abcdef",
 		"setting": {
 			"urlCheck": false
 		},

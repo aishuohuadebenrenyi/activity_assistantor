@@ -138,22 +138,43 @@ export default {
      * 扫码签到
      * 调用微信扫码接口，扫描现场二维码进行签到。
      */
-    scanCheckIn() {
+    async scanCheckIn() {
       uni.scanCode({
-        success: (res) => {
-          console.log('Scan success:', res)
-          uni.showToast({
-            title: '签到成功',
-            icon: 'success'
-          })
+        success: async (res) => {
+          const qrData = res.result
+          console.log('Scan success:', qrData)
+          
+          if (!qrData.startsWith('CHECKIN:')) {
+            uni.showToast({ title: '无效的签到码', icon: 'none' })
+            return
+          }
+          
+          uni.showLoading({ title: '核销中...' })
+          try {
+            type CheckinResponse = {
+              message: string
+              user: string
+              already_checked: boolean
+            }
+            
+            const result = await request<CheckinResponse>(
+              new RequestOptions(`/activities/${this.activity?.id}/checkin`, 'POST', { qr_data: qrData })
+            )
+            
+            uni.hideLoading()
+            if (result.already_checked) {
+              uni.showToast({ title: '您已签到过了', icon: 'none' })
+            } else {
+              uni.showToast({ title: '签到成功', icon: 'success' })
+            }
+          } catch (e) {
+            uni.hideLoading()
+            // Error handled by request util
+            console.error('Checkin failed', e)
+          }
         },
         fail: (err) => {
           console.error('Scan failed:', err)
-          // Mock success for demo even if scan fails or is cancelled in simulator
-          uni.showToast({
-            title: '签到成功 (模拟)',
-            icon: 'success'
-          })
         }
       })
     },

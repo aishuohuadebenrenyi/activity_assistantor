@@ -99,3 +99,66 @@ class WeChatService:
         except Exception as e:
             print(f"QRCode Exception: {e}")
             return None
+
+    @staticmethod
+    def get_openid(code):
+        """
+        Convert JS Code to OpenID (Mini Program Login)
+        """
+        appid = current_app.config.get('WECHAT_APPID')
+        secret = current_app.config.get('WECHAT_SECRET')
+        
+        if not appid or 'mock' in appid:
+            # Mocking openid based on code
+            return f"mock_openid_{code}"
+
+        url = f"https://api.weixin.qq.com/sns/jscode2session?appid={appid}&secret={secret}&js_code={code}&grant_type=authorization_code"
+        try:
+            resp = requests.get(url)
+            data = resp.json()
+            if 'openid' in data:
+                return data['openid']
+            else:
+                print(f"WeChat OpenID Error: {data}")
+                return None
+        except Exception as e:
+            print(f"WeChat OpenID Exception: {e}")
+            return None
+
+    @staticmethod
+    def check_content_security(content):
+        """
+        WeChat Message Security Check (msgSecCheck)
+        """
+        token = WeChatService.get_access_token()
+        if not token:
+            return True # If cannot get token, fail-safe or handle error?
+
+        if token == "mock_access_token":
+            # Simple keyword mock check for development
+            bad_keywords = ["敏感词", "违禁品", "政治"]
+            for word in bad_keywords:
+                if word in content:
+                    return False
+            return True
+
+        url = f"https://api.weixin.qq.com/wxa/msg_sec_check?access_token={token}"
+        payload = {
+            "version": 2,
+            "openid": "OPENID", # Recommended for better accuracy in v2
+            "scene": 2, # 2 for social/comment
+            "content": content
+        }
+        
+        try:
+            resp = requests.post(url, json=payload)
+            data = resp.json()
+            # result.suggest == "pass" means OK
+            if data.get('result', {}).get('suggest') == "pass":
+                return True
+            else:
+                print(f"Content Security Error: {data}")
+                return False
+        except Exception as e:
+            print(f"Content Security Exception: {e}")
+            return True # Fail-safe

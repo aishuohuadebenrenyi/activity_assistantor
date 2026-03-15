@@ -1,7 +1,14 @@
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
+import re
 
 db = SQLAlchemy()
+
+def mask_phone(phone):
+    """手机号脱敏处理，如 13812345678 -> 138****5678"""
+    if not phone or len(phone) < 7:
+        return phone
+    return f"{phone[:3]}****{phone[-4:]}"
 
 class User(db.Model):
     """
@@ -12,7 +19,9 @@ class User(db.Model):
     
     id = db.Column(db.Integer, primary_key=True)
     # 手机号，唯一标识，用于登录
-    phone = db.Column(db.String(20), unique=True, nullable=False, index=True)
+    phone = db.Column(db.String(20), unique=True, nullable=True, index=True)
+    # 微信 OpenID
+    openid = db.Column(db.String(128), unique=True, nullable=True, index=True)
     # 用户昵称，默认为'用户'
     username = db.Column(db.String(64), default='用户')
     # 头像 URL
@@ -23,15 +32,19 @@ class User(db.Model):
     is_certified = db.Column(db.Boolean, default=False)
     # 账户创建时间
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    # 注销请求时间（冷静期开始时间）
+    deletion_requested_at = db.Column(db.DateTime, nullable=True)
+    # 账户状态：active(活跃), pending_deletion(注销中), deleted(已脱敏)
+    status = db.Column(db.String(20), default='active')
     
     # 关系：该用户发布的所有活动
     activities = db.relationship('Activity', backref='organizer', lazy='dynamic')
 
-    def to_dict(self):
+    def to_dict(self, mask=False):
         """将对象转换为字典，便于 JSON 序列化"""
         return {
             'id': self.id,
-            'phone': self.phone,
+            'phone': mask_phone(self.phone) if mask else self.phone,
             'username': self.username,
             'avatar_url': self.avatar_url,
             'bio': self.bio,
@@ -75,11 +88,8 @@ class Activity(db.Model):
     # 关系：活动的签到记录（级联删除）
     checkin_records = db.relationship('CheckinRecord', backref='activity', lazy='dynamic', cascade='all, delete-orphan')
 
-    def to_dict(self):
-        registrations_list = [r.to_dict() for r in self.registrations]
-        checkins_list = [c.to_dict() for c in self.checkin_records]
-        
-        return {
+    def to_dict(self, include_registrations=True, mask_registrations=True):
+        res = {
             'id': self.id,
             'organizer_id': self.user_id,
             'name': self.name,
@@ -91,9 +101,13 @@ class Activity(db.Model):
             'status': self.status,
             'views_count': self.views_count,
             'created_at': self.created_at.isoformat(),
-            'registrations': registrations_list,
-            'checkin_records': checkins_list
         }
+        
+        if include_registrations:
+            res['registrations'] = [r.to_dict(mask=mask_registrations) for r in self.registrations]
+            res['checkin_records'] = [c.to_dict() for c in self.checkin_records]
+            
+        return res
 
 class Registration(db.Model):
     """
@@ -116,14 +130,13 @@ class Registration(db.Model):
     # 关系：该报名的签到记录（一对一）
     checkin_record = db.relationship('CheckinRecord', backref='registration', uselist=False, cascade='all, delete-orphan')
 
-    def to_dict(self):
+    def to_dict(self, mask=False):
         return {
             'id': self.id,
             'activity_id': self.activity_id,
             'name': self.name,
-            'phone': self.phone,
+            'phone': mask_phone(self.phone) if mask else self.phone,
             'created_at': self.created_at.isoformat(),
-            # 辅助字段：是否已签到
             'checked_in': self.checkin_record is not None
         }
 
@@ -151,4 +164,35 @@ class CheckinRecord(db.Model):
             'registration_id': self.registration_id,
             'activity_id': self.activity_id,
             'checkin_time': self.checkin_time.isoformat()
+        }
+
+class Report(db.Model):
+    """
+    举报模型
+    存储用户对活动的举报信息。
+    """
+    __tablename__ = 'reports'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    # 被举报的活动 ID
+    activity_id = db.Column(db.Integer, db.ForeignKey('activities.id'), nullable=False)
+    # 举报人 ID (Mock)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    # 举报原因分类
+    reason = db.Column(db.String(50), nullable=False)
+    # 举报详情（可选）
+    detail = db.Column(db.Text)
+    # 处理状态：pending(待处理), processed(已处理), rejected(已驳回)
+    status = db.Column(db.String(20), default='pending')
+    
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'activity_id': self.activity_id,
+            'user_id': self.user_id,
+            'reason': self.reason,
+            'status': self.status,
+            'created_at': self.created_at.isoformat()
         }

@@ -6,3 +6,7 @@ PyMySQL==1.1.0
 python-dotenv==1.0.0
 PyJWT==2.8.0
 requests==2.31.0
+Flask-Limiter==3.5.0
+Flask-Talisman==1.1.0
+pytest==7.4.3
+pytest-flask==1.3.0

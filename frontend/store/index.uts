@@ -3,112 +3,43 @@ import { reactive } from 'vue'
 import { request, RequestOptions } from '@/utils/request.uts'
 import { logEvent } from '@/utils/analytics.uts'
 import { setNetworkStatus } from '@/utils/network_state.uts'
+import { config } from '@/utils/config.uts'
+import { MOCK_ACTIVITIES } from '@/mock/data.uts'
+import { Activity, CheckinRecord, Registration } from './types.uts'
 
-export interface CheckinRecord {
+export { Activity, CheckinRecord, Registration } from './types.uts'
+
+export type User = {
   id: number;
-  name: string;
   phone: string;
-  time: string;
+  username: string;
+  avatar_url: string;
+  bio: string;
+  is_certified: boolean;
+  token: string;
 }
-
-export interface Registration {
-  id: number;
-  name: string;
-  phone: string;
-  createdAt: string;
-  checkedIn: boolean;
-}
-
-export interface Activity {
-  id: number;
-  name: string;
-  type: string;
-  date: string;
-  time: string;
-  location: string;
-  description: string;
-  capacity: number;
-  participants: number;
-  checkins: number;
-  views: number;
-  status: string; // 'upcoming', 'ongoing', 'ended'
-  checkinRecords: CheckinRecord[];
-  registrations: Registration[];
-  createdAt: string;
-}
-
-// 模拟数据作为兜底，当后端未连接时使用
-const MOCK_ACTIVITIES = [
-    {
-      id: 1,
-      name: "产品发布会",
-      type: "meeting",
-      date: "2023-06-15",
-      time: "14:00",
-      location: "北京国际会议中心",
-      description: "欢迎参加我们的年度产品发布会，届时将发布多款创新产品。",
-      capacity: 50,
-      participants: 6,
-      checkins: 4,
-      views: 245,
-      status: "ongoing",
-      checkinRecords: [
-        { id: 1, name: "张三", phone: "138****1234", time: "14:05" },
-        { id: 2, name: "李四", phone: "139****5678", time: "14:10" },
-        { id: 3, name: "王五", phone: "136****9012", time: "14:15" },
-        { id: 4, name: "赵六", phone: "137****3456", time: "14:20" }
-      ],
-      registrations: [
-        { id: 1, name: "张三", phone: "138****1234", createdAt: "2023-06-01T10:00:00Z", checkedIn: true },
-        { id: 2, name: "李四", phone: "139****5678", createdAt: "2023-06-02T11:00:00Z", checkedIn: true },
-        { id: 3, name: "王五", phone: "136****9012", createdAt: "2023-06-03T12:00:00Z", checkedIn: true },
-        { id: 4, name: "赵六", phone: "137****3456", createdAt: "2023-06-04T13:00:00Z", checkedIn: true },
-        { id: 5, name: "钱七", phone: "135****7890", createdAt: "2023-06-05T14:00:00Z", checkedIn: false },
-        { id: 6, name: "孙八", phone: "134****2345", createdAt: "2023-06-06T15:00:00Z", checkedIn: false }
-      ],
-      createdAt: "2023-06-01T10:00:00Z"
-    },
-    {
-      id: 2,
-      name: "技术研讨会",
-      type: "training",
-      date: "2023-05-20",
-      time: "09:30",
-      location: "上海科技园",
-      description: "深入探讨最新技术趋势和行业动态。",
-      capacity: 40,
-      participants: 3,
-      checkins: 2,
-      views: 187,
-      status: "ended",
-      checkinRecords: [
-        { id: 1, name: "赵六", phone: "137****3456", time: "09:25" },
-        { id: 2, name: "钱七", phone: "135****7890", time: "09:30" }
-      ],
-      registrations: [
-        { id: 4, name: "赵六", phone: "137****3456", createdAt: "2023-05-10T09:00:00Z", checkedIn: true },
-        { id: 5, name: "钱七", phone: "135****7890", createdAt: "2023-05-11T10:00:00Z", checkedIn: true },
-        { id: 6, name: "孙八", phone: "134****2345", createdAt: "2023-05-12T11:00:00Z", checkedIn: false }
-      ],
-      createdAt: "2023-05-01T10:00:00Z"
-    }
-] as Activity[];
 
 export const activitiesState = reactive({
-  activities: MOCK_ACTIVITIES,
+  activities: [] as Activity[],
+  user: null as User | null,
   isLoading: false,
   error: '',
   isOnline: true
 });
 
 const STORAGE_KEY = 'activities_data';
+const USER_KEY = 'user_data';
 
 export const saveToStorage = () => {
   try {
     uni.setStorageSync(STORAGE_KEY, activitiesState.activities);
-    // console.log('Activities saved to storage');
+    if (activitiesState.user != null) {
+      uni.setStorageSync(USER_KEY, activitiesState.user);
+    } else {
+      uni.removeStorageSync(USER_KEY);
+    }
   } catch (e) {
-    console.error('Failed to save activities to storage', e);
+    console.error('Failed to save to storage', e);
   }
 };
 
@@ -116,16 +47,18 @@ export const loadFromStorage = () => {
   try {
     const data = uni.getStorageSync(STORAGE_KEY);
     if (data != null) {
-       // UTS 中需要注意类型转换，这里假设存储的数据结构与 Activity[] 兼容
-       // 实际项目中可能需要更严格的类型检查
        const activities = data as Activity[];
        if (activities.length > 0) {
          activitiesState.activities = activities;
-         // console.log('Activities loaded from storage', activities.length);
        }
     }
+    
+    const userData = uni.getStorageSync(USER_KEY);
+    if (userData != null) {
+      activitiesState.user = userData as User;
+    }
   } catch (e) {
-    console.error('Failed to load activities from storage', e);
+    console.error('Failed to load from storage', e);
   }
 };
 
@@ -176,31 +109,35 @@ function mapBackendToFrontend(data: ActivityResponse): Activity {
   
   // 转换签到记录
   const checkinRecords: CheckinRecord[] = [];
-  data.checkin_records.forEach((c) => {
-    // 找到对应的报名信息以获取姓名和手机号
-    const reg = data.registrations.find((r) : boolean => r.id == c.registration_id);
-    const checkinTime = new Date(c.checkin_time);
-    const timeString = `${checkinTime.getHours().toString().padStart(2, '0')}:${checkinTime.getMinutes().toString().padStart(2, '0')}`;
-    
-    checkinRecords.push({
-      id: c.id,
-      name: reg?.name ?? '未知',
-      phone: reg?.phone ?? '',
-      time: timeString
-    } as CheckinRecord);
-  });
+  if (data.checkin_records != null) {
+    data.checkin_records.forEach((c) => {
+      // 找到对应的报名信息以获取姓名和手机号
+      const reg = data.registrations != null ? data.registrations.find((r) : boolean => r.id == c.registration_id) : null;
+      const checkinTime = new Date(c.checkin_time);
+      const timeString = `${checkinTime.getHours().toString().padStart(2, '0')}:${checkinTime.getMinutes().toString().padStart(2, '0')}`;
+      
+      checkinRecords.push({
+        id: c.id,
+        name: reg?.name ?? '未知',
+        phone: reg?.phone ?? '',
+        time: timeString
+      } as CheckinRecord);
+    });
+  }
 
   // 转换报名记录
   const registrations: Registration[] = [];
-  data.registrations.forEach((r) => {
-    registrations.push({
-      id: r.id,
-      name: r.name,
-      phone: r.phone,
-      createdAt: r.created_at,
-      checkedIn: r.checked_in
-    } as Registration);
-  });
+  if (data.registrations != null) {
+    data.registrations.forEach((r) => {
+      registrations.push({
+        id: r.id,
+        name: r.name,
+        phone: r.phone,
+        createdAt: r.created_at,
+        checkedIn: r.checked_in
+      } as Registration);
+    });
+  }
 
   return {
     id: data.id,
@@ -211,8 +148,8 @@ function mapBackendToFrontend(data: ActivityResponse): Activity {
     location: data.location,
     description: data.description,
     capacity: data.capacity,
-    participants: data.registrations.length,
-    checkins: data.checkin_records.length,
+    participants: data.registrations?.length ?? 0,
+    checkins: data.checkin_records?.length ?? 0,
     views: data.views_count,
     status: data.status,
     checkinRecords: checkinRecords,
@@ -230,9 +167,11 @@ export const fetchActivities = async () => {
     activitiesState.activities = res.map((item) => mapBackendToFrontend(item));
     saveToStorage();
   } catch (e) {
-    console.error("Fetch activities failed, using mock data", e);
-    // 失败时不覆盖 Mock 数据，或者显示错误提示
-    activitiesState.error = "加载失败，请检查网络";
+    console.error("Fetch activities failed", e);
+    // 如果不是因为 Mock 导致的错误，显示错误提示
+    if (!config.USE_MOCK) {
+        activitiesState.error = "加载失败，请检查网络";
+    }
   } finally {
     activitiesState.isLoading = false;
   }
@@ -286,10 +225,109 @@ export const addActivity = async (activity: Activity): Promise<Activity> => {
   }
 };
 
-export const updateActivity = (activity: Activity) => {
+export const updateActivity = async (activity: Activity): Promise<Activity> => {
   const index = activitiesState.activities.findIndex(a => a.id === activity.id);
-  if (index !== -1) {
-    activitiesState.activities[index] = activity;
-    // TODO: 调用 PUT /activities/:id
+  if (index === -1) {
+    throw new Error('Activity not found');
+  }
+  
+  // 乐观更新
+  const oldActivity = activitiesState.activities[index];
+  activitiesState.activities[index] = activity;
+  
+  try {
+    const payload = {
+      name: activity.name,
+      type: activity.type,
+      date: activity.date,
+      time: activity.time,
+      location: activity.location,
+      description: activity.description,
+      capacity: activity.capacity
+    };
+    
+    const res = await request<ActivityResponse>(new RequestOptions(`/activities/${activity.id}`, 'PUT', payload));
+    const realActivity = mapBackendToFrontend(res);
+    
+    activitiesState.activities[index] = realActivity;
+    saveToStorage();
+    logEvent('activity_update_success', { id: realActivity.id });
+    return realActivity;
+  } catch (e) {
+    if (e instanceof Error && e.message === 'OFFLINE_QUEUED') {
+        console.log('Activity update queued offline');
+        saveToStorage();
+        return activity;
+    }
+
+    console.error("Update activity failed", e);
+    // 失败回滚
+    activitiesState.activities[index] = oldActivity;
+    throw e;
+  }
+};
+
+export const deleteActivity = async (id: number) => {
+  const index = activitiesState.activities.findIndex(a => a.id === id);
+  if (index === -1) return;
+  
+  const oldActivity = activitiesState.activities[index];
+  activitiesState.activities.splice(index, 1);
+  
+  try {
+    await request<void>(new RequestOptions(`/activities/${id}`, 'DELETE'));
+    saveToStorage();
+    logEvent('activity_delete_success', { id: id });
+  } catch (e) {
+    if (e instanceof Error && e.message === 'OFFLINE_QUEUED') {
+        console.log('Activity deletion queued offline');
+        saveToStorage();
+        return;
+    }
+    
+    // Rollback
+    activitiesState.activities.splice(index, 0, oldActivity);
+    throw e;
+  }
+};
+
+export const deleteUserAccount = async (force: boolean = false): Promise<any> => {
+  try {
+    // force 为 true 时表示在冷静期内的第二次确认，执行最终注销
+    const res = await request<any>(new RequestOptions('/user/account', 'DELETE', { force: force }));
+    
+    // 如果后端返回状态是 'success'，说明账号已彻底注销或已脱敏
+    if (res.status === 'success') {
+      // 清除本地数据
+      activitiesState.user = null;
+      activitiesState.activities = [];
+      uni.removeStorageSync(STORAGE_KEY);
+      uni.removeStorageSync(USER_KEY);
+      uni.removeStorageSync('token');
+      logEvent('user_account_deleted_final');
+    } else {
+      // 否则说明进入了冷静期
+      logEvent('user_account_deletion_pending');
+    }
+    
+    return res;
+  } catch (e) {
+    console.error("Delete account failed", e);
+    throw e;
+  }
+};
+
+export const reportContent = async (targetType: string, targetId: number, reason: string) => {
+  try {
+    const payload = {
+      target_type: targetType,
+      target_id: targetId,
+      reason: reason
+    };
+    await request<void>(new RequestOptions('/user/report', 'POST', payload));
+    logEvent('content_reported', { type: targetType, id: targetId });
+  } catch (e) {
+    console.error("Report content failed", e);
+    throw e;
   }
 };

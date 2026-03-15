@@ -1,0 +1,33 @@
+
+export interface CheckinRecord {
+  id: number;
+  name: string;
+  phone: string;
+  time: string;
+}
+
+export interface Registration {
+  id: number;
+  name: string;
+  phone: string;
+  createdAt: string;
+  checkedIn: boolean;
+}
+
+export interface Activity {
+  id: number;
+  name: string;
+  type: string;
+  date: string;
+  time: string;
+  location: string;
+  description: string;
+  capacity: number;
+  participants: number;
+  checkins: number;
+  views: number;
+  status: string; // 'upcoming', 'ongoing', 'ended'
+  checkinRecords: CheckinRecord[];
+  registrations: Registration[];
+  createdAt: string;
+}

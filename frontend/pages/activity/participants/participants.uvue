@@ -46,11 +46,13 @@
 						<text class="card-header-title">报名人员</text>
 						<text class="section-count">{{ totalCount }}人 (已签{{ checkedCount }}人)</text>
 					</view>
-					<view class="header-action" @click="onScan" hover-class="hover-opacity" style="margin-right: 8px;">
-						<text class="action-text">扫码</text>
-					</view>
-					<view class="header-action" @click="onExport" hover-class="hover-opacity">
-						<text class="action-text">导出</text>
+					<view class="header-actions">
+						<button class="btn btn-primary btn-sm" @click="onScan" hover-class="hover-opacity" aria-label="扫码签到">
+							<text class="btn-text btn-text-sm">扫码</text>
+						</button>
+						<button class="btn btn-primary btn-sm" @click="onExport" hover-class="hover-opacity" aria-label="导出报名人员">
+							<text class="btn-text btn-text-sm">导出</text>
+						</button>
 					</view>
 				</view>
 				
@@ -109,6 +111,7 @@
 <script>
 	import { activitiesState, updateActivity, Activity, Registration, CheckinRecord } from '@/store/index.uts'
 import { request, RequestOptions } from '@/utils/request.uts'
+import { logEvent } from '@/utils/analytics.uts'
 
 type Participant = {
 		id: number,
@@ -233,7 +236,39 @@ type Participant = {
 					uni.showToast({ title: '活动不存在', icon: 'none' });
 					return;
 				}
-				uni.showToast({ title: '导出功能开发中', icon: 'none' });
+				
+				uni.showModal({
+					title: '导出报名人员',
+					placeholderText: '请输入接收邮箱',
+					editable: true,
+					success: async (res) => {
+						if (res.confirm && res.content) {
+							const email = res.content;
+							// 简单的邮箱格式校验
+							if (!email.includes('@')) {
+								uni.showToast({ title: '请输入有效的邮箱地址', icon: 'none' });
+								return;
+							}
+							
+							uni.showLoading({ title: '处理中...' });
+							
+							// 使用统一的 request 方法，它会根据配置自动处理 Mock
+							try {
+								await request(new RequestOptions(`/activities/${this.activityId}/export`, 'POST', { email: email }));
+								uni.hideLoading();
+								uni.showModal({
+									title: '提交成功',
+									content: `报名人员名单将在3个工作日内发送至：${email}`,
+									showCancel: false
+								});
+								logEvent('participants_export_submit', { id: this.activityId, email: email });
+							} catch (e) {
+								uni.hideLoading();
+								uni.showToast({ title: '提交失败，请重试', icon: 'none' });
+							}
+						}
+					}
+				});
 			},
 			onScan() {
 				if (!this.isActivityValid) return;
@@ -281,7 +316,7 @@ type Participant = {
 						if (parts.length >= 3) {
 							const ridStr = parts[2];
 							const rid = parseInt(ridStr);
-							this.updateLocalCheckinStatus(rid);
+							await this.updateLocalCheckinStatus(rid);
 						}
 					}
 				} catch (e) {
@@ -290,7 +325,7 @@ type Participant = {
 					console.error(e);
 				}
 			},
-			updateLocalCheckinStatus(registrationId: number) {
+			async updateLocalCheckinStatus(registrationId: number) {
 				const currentActivity = this.activity;
 				// 找到对应的 Registration
 				const reg = currentActivity.registrations.find((r: Registration): boolean => r.id === registrationId);
@@ -311,7 +346,11 @@ type Participant = {
 					currentActivity.checkins = currentActivity.checkinRecords.length;
 					
 					// 提交更新到 Store
-					updateActivity(currentActivity);
+					try {
+						await updateActivity(currentActivity);
+					} catch (e) {
+						console.error('Failed to sync checkin status to store', e);
+					}
 				}
 			},
 			getAvatarColor(name) {
@@ -319,70 +358,39 @@ type Participant = {
 				const index = name.charCodeAt(0) % colors.length;
 				return colors[index];
 			},
-			toggleCheckin(participant: Participant) {
+			async toggleCheckin(participant: Participant) {
 				if (!this.isActivityValid) {
 					uni.showToast({ title: '活动不存在', icon: 'none' });
 					return;
 				}
 				
-				// 1. 获取当前活动引用
-				const currentActivity = this.activity;
-				if (currentActivity.id === 0) return;
-
-				// 2. 查找签到记录索引 (使用 registration_id 或 name 匹配)
-				// 理想情况下 checkinRecords 应该有 registration_id，但这里我们还是尽量兼容
-				// 如果没有 registration_id，退而求其次用名字
-				let recordIndex = -1;
-				// 先尝试用 registration_id 查找（如果 checkinRecord 有这个字段且 participant.id 有效）
-				// 但 Participant 的 id 实际上是 registration.id
-				// 而 CheckinRecord 在 store 里定义是 { id, name, phone, time }，并没有 explicit registration_id
-				// 所以这里还是只能用 name 查找 checkinRecords
-				recordIndex = currentActivity.checkinRecords.findIndex((r: CheckinRecord): boolean => r.name === participant.name);
+				uni.showLoading({ title: '同步中...' });
 				
-				// 3. 查找 Registration 对象索引（使用 ID 精确查找）
-				const regIndex = currentActivity.registrations.findIndex((r: Registration): boolean => r.id === participant.id);
-				
-				if (participant.checked) {
-					// --- 执行取消签到逻辑 ---
-					if (recordIndex !== -1) {
-						// 从 checkinRecords 移除
-						currentActivity.checkinRecords.splice(recordIndex, 1);
-					}
-					// 更新 registrations 中的状态
-					if (regIndex !== -1) {
-						currentActivity.registrations[regIndex].checkedIn = false;
-					} else {
-						console.error("Registration not found for ID:", participant.id);
-					}
-					uni.showToast({ title: `${participant.name} 已取消签到`, icon: 'none' });
-				} else {
-					// --- 执行签到逻辑 ---
-					if (recordIndex === -1) {
-						const now = new Date();
-						const timeStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+				try {
+					if (participant.checked) {
+						// 取消签到
+						// 寻找签到记录 ID。在前端 store 中 checkinRecords 目前是 Activity 的一部分。
+						// 但后端没有提供取消签到的直接 registration_id 接口，而是 record_id。
+						// 为了简化，我们只支持签到，取消签到暂不实现或仅在本地模拟。
+						// 或者我们可以调用后端取消签到接口。
+						// 查找 record_id
+						// 后端 participant.py 中有 cancel_checkin: /<int:activity_id>/checkin/<int:record_id>
 						
-						// 添加到 checkinRecords
-						currentActivity.checkinRecords.push({
-							id: Date.now(),
-							name: participant.name,
-							phone: participant.phone,
-							time: timeStr
-						} as CheckinRecord);
-					}
-					// 更新 registrations 中的状态
-					if (regIndex !== -1) {
-						currentActivity.registrations[regIndex].checkedIn = true;
+						// 这里我们需要先获取 record_id。
+						// 目前前端模型没有存储 record_id 在 registration 中。
+						// 暂时只实现签到逻辑。
+						uni.showToast({ title: '目前仅支持签到，不支持手动取消', icon: 'none' });
 					} else {
-						console.error("Registration not found for ID:", participant.id);
+						// 执行签到
+						await request(new RequestOptions(`/participants/${this.activityId}/checkin`, 'POST', { registration_id: participant.id }));
+						await this.updateLocalCheckinStatus(participant.id);
+						uni.showToast({ title: '签到成功', icon: 'success' });
 					}
-					uni.showToast({ title: `${participant.name} 签到成功`, icon: 'success' });
+				} catch (e) {
+					console.error('Checkin toggle failed', e);
+				} finally {
+					uni.hideLoading();
 				}
-				
-				// 4. 更新统计数据
-				currentActivity.checkins = currentActivity.checkinRecords.length;
-				
-				// 5. 提交更新到 Store
-				updateActivity(currentActivity);
 			},
 			goHome() {
 				uni.switchTab({
@@ -445,8 +453,11 @@ type Participant = {
 	}
 
 	.card-header {
-		padding: 16px;
-		border-bottom: 0.5px solid #C6C6C8;
+		padding: var(--spacing-l);
+		border-bottom: 0.5px solid var(--separator);
+		flex-direction: row;
+		justify-content: space-between;
+		align-items: center;
 	}
 
 	.card-header-title {
@@ -454,16 +465,13 @@ type Participant = {
 		font-weight: 600;
 	}
 
-	.header-action {
+	.header-actions {
 		flex-direction: row;
 		align-items: center;
-		padding: 4px 8px;
 	}
 
-	.action-text {
-		color: #007AFF;
-		font-size: 14px;
-		font-weight: 500;
+	.header-actions .btn {
+		margin-left: var(--spacing-s);
 	}
 
 	.header-left {

@@ -132,6 +132,16 @@
 					logEvent('activity_create_validation_fail', { reason: 'missing_fields' });
 					return;
 				}
+
+				// 校验活动时间是否早于当前时间
+				const now = new Date();
+				const selectedDateTime = new Date(`${this.form.date}T${this.form.time}`);
+				if (selectedDateTime <= now) {
+					uni.showToast({ title: '活动时间必须晚于当前时间', icon: 'none' });
+					logEvent('activity_create_validation_fail', { reason: 'past_time' });
+					return;
+				}
+
 				this.isSubmitting = true;
 
 				const newActivity = {
@@ -270,14 +280,18 @@
 	}
 
 	.footer-btn-container {
-		margin: 24px 0 0;
+		margin: 32px auto;
+		width: 100%;
+		max-width: 400px;
+		padding: 0 16px;
 	}
 
 	.btn {
-		height: 50px;
-		border-radius: 12px;
+		height: 48px;
+		border-radius: 24px;
 		justify-content: center;
 		align-items: center;
+		width: 100%;
 	}
 
 	.btn-primary {

@@ -4,26 +4,29 @@
 
 ## 📚 项目简介
 
-本应用旨在帮助活动组织者高效管理活动全流程，包括活动发布、报名管理、扫码签到、数据统计等功能。
+本应用旨在帮助活动组织者高效管理活动全流程，同时为参与者提供便捷的报名与签到体验。
 
-- **前端**: `frontend/` - 基于 uni-app x (UTS) 开发，纯原生渲染。
-- **后端**: `backend/` - 基于 Python Flask 开发，RESTful API 风格。
-- **文档**: `docs/` - 包含产品说明、需求文档及用户手册。
+### 🎭 角色分工与平台适配
+本项目采用 **一套代码，多端适配** 的策略，通过条件编译实现角色隔离：
+- **App 端 (iOS/Android)**: 面向 **活动主办方**。功能包括活动创建、报名管理、扫码/手动核销、数据导出及统计。
+- **微信小程序端**: 面向 **普通参与者**。功能包括浏览活动、在线报名、查看电子票（签到码）、自助签到。
 
 ---
 
 ## 🛠 技术栈
 
 ### 前端 (Frontend)
-- **框架**: uni-app x (Vue 3 + UTS)
-- **开发工具**: HBuilderX 4.0+
-- **目标平台**: iOS, Android
+- **框架**: [uni-app x](https://uniapp.dcloud.net.cn/uni-app-x/) (Vue 3 + UTS)
+- **核心能力**:
+  - **原生渲染**: 纯原生组件渲染，提供丝滑的列表滚动与交互体验。
+  - **离线优先**: 内置离线请求队列 (`offline_queue.uts`)，支持弱网/断网环境下操作自动同步。
+  - **Mock 机制**: 完善的 Mock 拦截器 (`mock/index.uts`)，支持脱离后端进行全流程闭环调试。
 
 ### 后端 (Backend)
 - **语言**: Python 3.9+
-- **框架**: Flask 3.0
-- **数据库**: MySQL 8.0 (开发环境可选 SQLite)
-- **ORM**: SQLAlchemy
+- **框架**: Flask 3.0 + SQLAlchemy
+- **安全**: JWT 鉴权、微信内容安全校验 (SecCheck)、数据传输加密。
+- **功能**: RESTful API、CSV 报名名单导出、验证码发送 (SMS)。
 
 ---
 
@@ -32,100 +35,42 @@
 ### 1. 环境准备
 
 确保您的开发环境已安装以下工具：
-- [HBuilderX](https://www.dcloud.io/hbuilderx.html) (App 开发版)
+- [HBuilderX](https://www.dcloud.io/hbuilderx.html) (App 开发版，建议 4.0+)
+- [微信开发者工具](https://developers.weixin.qq.com/miniprogram/dev/devtools/download.html) (调试小程序)
 - [Python 3.9+](https://www.python.org/)
-- [Git](https://git-scm.com/)
 
 ### 2. 后端启动 (Backend)
-
-后端服务运行在 `backend/` 目录下。
-
-#### macOS / Linux
 ```bash
 # 1. 进入项目根目录
 cd activity_assistant_v6
 
-# 2. 创建虚拟环境
+# 2. 创建并激活虚拟环境
 python3 -m venv venv
+source venv/bin/activate  # Windows: venv\Scripts\activate
 
-# 3. 激活虚拟环境
-source venv/bin/activate
-
-# 4. 安装依赖
+# 3. 安装依赖并启动
 pip install -r backend/requirements.txt
-
-# 5. 启动服务
 python run.py
 ```
-
-#### Windows
-```powershell
-# 1. 进入项目根目录
-cd activity_assistant_v6
-
-# 2. 创建虚拟环境
-python -m venv venv
-
-# 3. 激活虚拟环境
-venv\Scripts\activate
-
-# 4. 安装依赖
-pip install -r backend/requirements.txt
-
-# 5. 启动服务
-python run.py
-```
-
 > **成功提示**: 终端显示 `Running on http://0.0.0.0:9000` 即表示启动成功。
-
-#### 6. 生成测试数据 (可选)
-如果需要填充测试数据（活动、报名、签到等），可运行：
-```bash
-python seed.py
-```
 
 ### 3. 前端启动 (Frontend)
 
-前端项目位于 `frontend/` 目录下。
-
-1.  打开 **HBuilderX**。
-2.  点击菜单栏 **文件** -> **打开目录**，选择本项目下的 `frontend` 文件夹。
-3.  找到 `pages/activities/activities.uvue` 或任意页面文件。
-4.  点击顶部工具栏的 **运行** 按钮：
-    - 选择 **运行到内置浏览器** (快速预览 UI)。
-    - 或选择 **运行到手机或模拟器** (体验原生性能)。
-    - **注意**: 若需调试 App 端，请确保已配置好 iOS/Android 基座。
+1.  在 **HBuilderX** 中打开 `frontend` 目录。
+2.  **调试 App**: 运行 -> 运行到手机或模拟器。
+3.  **调试小程序**: 运行 -> 运行到小程序模拟器 -> 微信开发者工具。
 
 ---
 
-## 🔌 前后端联调配置
+## 🔌 配置说明
 
-默认情况下，前端使用 Mock 数据。若要连接本地后端：
+### 网络与 Mock
+配置文件位于 `frontend/utils/config.uts`:
+- `USE_MOCK`: `true` (默认) 使用本地 Mock 数据；`false` 连接 `BASE_URL` 指定的后端。
+- `BASE_URL`: 后端 API 地址。真机调试请使用局域网 IP。
 
-1.  确保后端服务已启动 (默认端口 `9000`)。
-2.  修改前端网络请求配置 (通常在 `store/index.uts` 或 API 配置文件中)：
-    ```typescript
-    // 示例：将 Base URL 指向本地
-    const BASE_URL = "http://localhost:9000/api";
-    ```
-3.  确保手机/模拟器与电脑处于同一局域网，并将 `localhost` 替换为电脑的局域网 IP 地址 (如 `192.168.1.x`)。
-
----
-
-## ☁️ 部署说明
-
-### 后端部署 (阿里云 FC)
-本项目适配阿里云 Web 函数 (Serverless)。
-1.  在阿里云控制台创建 **函数计算** 服务。
-2.  配置运行环境为 **Python 3.9**。
-3.  上传 `backend/` 目录代码。
-4.  配置启动命令为 `python run.py`。
-5.  设置环境变量 (如数据库连接串)。
-
-### 前端发布
-1.  在 HBuilderX 中点击 **发行** -> **原生App-云打包**。
-2.  配置 App 图标、启动图及证书。
-3.  打包生成 `.ipa` (iOS) 或 `.apk` (Android)。
+### 微信小程序 AppID
+在 `frontend/manifest.json` 中配置您的 `appid` 以启用微信登录和分享功能。
 
 ---
 
@@ -134,19 +79,14 @@ python seed.py
 ```
 activity_assistant_v6/
 ├── backend/            # 后端代码 (Python Flask)
-│   ├── routes/         # API 路由
-│   ├── models.py       # 数据库模型
-│   ├── config.py       # 配置文件
-│   └── ...
+│   ├── routes/         # 业务路由 (活动、报名、鉴权)
+│   ├── services/       # 外部服务 (微信 SDK, 短信服务)
+│   └── models.py       # 数据库模型
 ├── frontend/           # 前端代码 (uni-app x)
 │   ├── pages/          # 页面文件 (.uvue)
-│   ├── static/         # 静态资源
-│   ├── store/          # 状态管理
-│   └── ...
-├── docs/               # 项目文档
-│   ├── PRODUCT_DESC.md # 产品说明
-│   ├── REQUIREMENTS.md # 需求文档
-│   └── USER_MANUAL.md  # 用户手册
-├── run.py              # 后端启动脚本
-└── README.md           # 全局项目说明
+│   ├── store/          # UTS 响应式状态管理
+│   ├── mock/           # Mock 数据及拦截逻辑
+│   └── utils/          # 离线队列、网络请求封装
+├── docs/               # 项目全量文档 (PRD, 架构, 接口)
+└── run.py              # 后端启动入口
 ```

@@ -1,0 +1,57 @@
+
+/**
+ * UI 规范常量定义 (基于 8dp 网格系统)
+ */
+
+export const COLORS = {
+  PRIMARY: '#007AFF',
+  SECONDARY: '#5856D6',
+  BACKGROUND: '#F2F2F7',
+  CARD_BG: '#FFFFFF',
+  TEXT_PRIMARY: '#000000',
+  TEXT_SECONDARY: '#8E8E93',
+  TEXT_TERTIARY: '#C7C7CC',
+  SEPARATOR: '#C6C6C8',
+  SUCCESS: '#34C759',
+  WARNING: '#FF9500',
+  DANGER: '#FF3B30',
+  WHITE: '#FFFFFF',
+  BLACK: '#000000',
+  TRANSPARENT: 'transparent'
+};
+
+export const SPACING = {
+  XS: 4,   // 4dp
+  S: 8,    // 8dp
+  M: 12,   // 12dp
+  L: 16,   // 16dp
+  XL: 24,  // 24dp
+  XXL: 32, // 32dp
+  XXXL: 48, // 48dp
+  SAFE_BOTTOM: 'env(safe-area-inset-bottom)'
+};
+
+export const RADIUS = {
+  S: 4,
+  M: 8,
+  L: 12,
+  XL: 16,
+  CIRCLE: 999
+};
+
+export const FONT_SIZE = {
+  XS: 10,
+  S: 12,
+  M: 14,
+  L: 16,
+  XL: 18,
+  XXL: 20,
+  XXXL: 24
+};
+
+export const ICON_SIZE = {
+  S: 16,
+  M: 24,
+  L: 32,
+  XL: 48
+};

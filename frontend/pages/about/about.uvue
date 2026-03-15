@@ -7,15 +7,15 @@
 		</view>
 
 		<view class="card">
-			<view class="card-item">
+			<view class="card-item" @click="openWebsite" hover-class="hover-opacity">
 				<text class="item-label">官方网站</text>
 				<text class="item-value">www.activityhelper.com</text>
 			</view>
-			<view class="card-item">
+			<view class="card-item" @click="openPrivacy" hover-class="hover-opacity">
 				<text class="item-label">隐私政策</text>
 				<text class="arrow">➡️</text>
 			</view>
-			<view class="card-item">
+			<view class="card-item" @click="openTerms" hover-class="hover-opacity">
 				<text class="item-label">服务协议</text>
 				<text class="arrow">➡️</text>
 			</view>
@@ -28,9 +28,38 @@
 </template>
 
 <script>
+	import { config } from '@/utils/config.uts'
+
 	export default {
 		methods: {
-			// Add any necessary methods here
+			openWebsite() {
+				this.openUrl('https://www.activityhelper.com')
+			},
+			openPrivacy() {
+				const url = config.PRIVACY_POLICY_URL
+				if (url != null) {
+					this.openUrl(url as string)
+				}
+			},
+			openTerms() {
+				const url = config.USER_AGREEMENT_URL
+				if (url != null) {
+					this.openUrl(url as string)
+				}
+			},
+			openUrl(url: string) {
+				// #ifdef APP-PLUS
+				plus.runtime.openURL(url)
+				// #endif
+				// #ifdef H5
+				window.open(url)
+				// #endif
+				// #ifdef MP-WEIXIN
+				uni.navigateTo({
+					url: `/pages/webview/webview?url=${encodeURIComponent(url)}`
+				})
+				// #endif
+			}
 		}
 	}
 </script>

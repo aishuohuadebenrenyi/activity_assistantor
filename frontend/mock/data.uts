@@ -1,0 +1,75 @@
+
+import { Activity } from '@/store/types.uts'
+
+// 这里的 MOCK_ACTIVITIES 使用的是后端返回的 ActivityResponse 格式，以便 mapBackendToFrontend 能够正常处理
+export const MOCK_ACTIVITIES: any[] = [
+    {
+      id: 1,
+      organizer_id: 1,
+      name: "产品发布会",
+      type: "meeting",
+      start_time: "2023-06-15T14:00:00",
+      location: "北京国际会议中心",
+      description: "欢迎参加我们的年度产品发布会，届时将发布多款创新产品。",
+      capacity: 50,
+      status: "ongoing",
+      views_count: 245,
+      created_at: "2023-06-01T10:00:00Z",
+      registrations: [
+        { id: 1, activity_id: 1, name: "张三", phone: "138****1234", created_at: "2023-06-01T10:00:00Z", checked_in: true },
+        { id: 2, activity_id: 1, name: "李四", phone: "139****5678", created_at: "2023-06-02T11:00:00Z", checked_in: true },
+        { id: 3, activity_id: 1, name: "王五", phone: "136****9012", created_at: "2023-06-03T12:00:00Z", checked_in: true },
+        { id: 4, activity_id: 1, name: "赵六", phone: "137****3456", created_at: "2023-06-04T13:00:00Z", checked_in: true },
+        { id: 5, activity_id: 1, name: "钱七", phone: "135****7890", created_at: "2023-06-05T14:00:00Z", checked_in: false },
+        { id: 6, activity_id: 1, name: "孙八", phone: "134****2345", created_at: "2023-06-06T15:00:00Z", checked_in: false }
+      ],
+      checkin_records: [
+        { id: 1, registration_id: 1, activity_id: 1, checkin_time: "2023-06-15T14:05:00" },
+        { id: 2, registration_id: 2, activity_id: 1, checkin_time: "2023-06-15T14:10:00" },
+        { id: 3, registration_id: 3, activity_id: 1, checkin_time: "2023-06-15T14:15:00" },
+        { id: 4, registration_id: 4, activity_id: 1, checkin_time: "2023-06-15T14:20:00" }
+      ]
+    },
+    {
+      id: 2,
+      organizer_id: 1,
+      name: "技术研讨会",
+      type: "training",
+      start_time: "2023-05-20T09:30:00",
+      location: "上海科技园区",
+      description: "深入探讨最新技术趋势和行业动态。",
+      capacity: 40,
+      status: "ended",
+      views_count: 187,
+      created_at: "2023-05-01T10:00:00Z",
+      registrations: [
+        { id: 10, activity_id: 2, name: "赵六", phone: "137****3456", created_at: "2023-05-10T09:00:00Z", checked_in: true },
+        { id: 11, activity_id: 2, name: "钱七", phone: "135****7890", created_at: "2023-05-11T10:00:00Z", checked_in: true },
+        { id: 12, activity_id: 2, name: "孙八", phone: "134****2345", created_at: "2023-05-12T11:00:00Z", checked_in: false }
+      ],
+      checkin_records: [
+        { id: 5, registration_id: 10, activity_id: 2, checkin_time: "2023-05-20T09:25:00" },
+        { id: 6, registration_id: 11, activity_id: 2, checkin_time: "2023-05-20T09:30:00" }
+      ]
+    }
+];
+
+export const MOCK_USER = {
+  id: 1,
+  username: "测试用户",
+  avatar_url: "/static/avatar.png",
+  phone: "13800138000",
+  bio: "这个人很懒，什么都没留下",
+  is_certified: true,
+  token: "mock-jwt-token"
+};
+
+export const MOCK_TICKET = {
+  id: 1,
+  activityId: 1,
+  activityName: "产品发布会",
+  userName: "张三",
+  userPhone: "138****1234",
+  ticketCode: "CHECKIN:1:1:SECRET_TOKEN",
+  status: "valid"
+};

@@ -49,3 +49,15 @@ export const addToQueue = (options: RequestOptions) => {
     icon: 'none'
   })
 }
+
+/**
+ * 监听网络变化，自动处理离线队列
+ */
+export const setupNetworkListener = (processCallback: () => void) => {
+  uni.onNetworkStatusChange((res) => {
+    if (res.isConnected) {
+      console.log('Network is back, processing offline queue...');
+      processCallback();
+    }
+  });
+}

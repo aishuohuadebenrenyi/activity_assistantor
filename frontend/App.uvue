@@ -3,11 +3,22 @@
 	import { setOnlineStatus, loadFromStorage } from '@/store/index.uts'
 	import { logEvent } from '@/utils/analytics.uts'
 	import { processQueue } from '@/utils/request.uts'
+	import { config } from '@/utils/config.uts'
 
 	export default {
 		onLaunch: function() {
 			console.log('App Launch')
 			
+			// 0. 如果配置了清除缓存，则执行清除操作
+			if (config.CLEAR_CACHE_ON_START) {
+				console.log('[Config] Clearing cache on start...');
+				try {
+					uni.clearStorageSync();
+				} catch (e) {
+					console.error('Failed to clear storage', e);
+				}
+			}
+
 			// 1. 初始化本地存储数据
 			loadFromStorage();
 			
@@ -49,6 +60,15 @@
 				logEvent('network_change', { isConnected: isConnected, networkType: res.networkType });
 			});
 		},
+		onError: function(err: any) {
+			console.error('Global Error:', err);
+			// 简单的错误拦截提示
+			uni.showToast({
+				title: '程序遇到点小问题，已尝试自动恢复',
+				icon: 'none'
+			});
+			logEvent('global_error', { message: err.toString() });
+		},
 		onShow: function() {
 			console.log('App Show')
 		},
@@ -62,6 +82,7 @@
 	/* #ifndef APP-NVUE */
 	:root {
 		--primary: #007AFF;
+		--primary-strong: #005FCC;
 		--secondary: #5856D6;
 		--background: #F2F2F7;
 		--card-bg: #FFFFFF;
@@ -73,9 +94,20 @@
 		--warning: #FF9500;
 		--danger: #FF3B30;
 		--surface: #FFFFFF;
-		--radius: 12px;
-		--spacing-md: 12px;
-		--spacing-lg: 16px;
+		--radius-s: 4px;
+		--radius-m: 8px;
+		--radius-l: 12px;
+		--radius-xl: 16px;
+		--radius-circle: 999px;
+		--spacing-xs: 4px;
+		--spacing-s: 8px;
+		--spacing-m: 12px;
+		--spacing-l: 16px;
+		--spacing-xl: 24px;
+		--spacing-xxl: 32px;
+		--focus-ring: rgba(0, 122, 255, 0.35);
+		--motion-fast: 150ms;
+		--ease-standard: cubic-bezier(0.2, 0, 0, 1);
 	}
 	/* #endif */
 
@@ -94,16 +126,16 @@
 
 	.card {
 		background-color: #FFFFFF;
-		border-radius: 12px;
-		margin-bottom: 16px;
+		border-radius: var(--radius-l);
+		margin-bottom: var(--spacing-l);
 		/* #ifndef APP-NVUE */
 		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
 		/* #endif */
 	}
 
 	.card-header {
-		padding: 16px;
-		border-bottom: 0.5px solid #C6C6C8;
+		padding: var(--spacing-l);
+		border-bottom: 0.5px solid var(--separator);
 		flex-direction: row;
 		justify-content: space-between;
 		align-items: center;
@@ -112,25 +144,93 @@
 	.card-header-title {
 		font-size: 16px;
 		font-weight: 600;
-		color: #000000;
+		color: var(--text-primary);
 	}
 
 	.card-content {
-		padding: 16px;
+		padding: var(--spacing-l);
 	}
 
 	.btn {
-		height: 44px;
-		border-radius: 10px;
+		height: 48px;
+		border-radius: var(--radius-m);
 		justify-content: center;
 		align-items: center;
-		background-color: #007AFF;
+		background-color: var(--primary);
+		padding: 0 var(--spacing-xl);
+		border-width: 0;
+		border-color: transparent;
+		/* #ifndef APP-NVUE */
+		outline: none;
+		cursor: pointer;
+		transition: opacity var(--motion-fast) var(--ease-standard), transform var(--motion-fast) var(--ease-standard), background-color var(--motion-fast) var(--ease-standard);
+		/* #endif */
 	}
 
 	.btn-text {
-		color: #FFFFFF;
+		color: var(--white, #FFFFFF);
 		font-size: 16px;
 		font-weight: 600;
+		text-align: center;
+		line-height: 48px;
+	}
+
+	.btn-primary {
+		background-color: var(--primary);
+	}
+
+	.btn-sm {
+		height: 32px;
+		min-width: 64px;
+		padding: 0 12px;
+		border-radius: 16px;
+	}
+
+	.btn-row {
+		flex-direction: row;
+	}
+
+	.btn-icon-sm {
+		color: var(--white, #FFFFFF);
+		font-size: 14px;
+		font-weight: 700;
+		line-height: 1;
+	}
+
+	.btn-row .btn-icon-sm {
+		margin-right: 4px;
+	}
+
+	.btn-text-sm {
+		font-size: 13px;
+		font-weight: 600;
+		line-height: 32px;
+	}
+
+	.btn-disabled,
+	.btn[disabled] {
+		opacity: 0.5;
+	}
+
+	/* #ifndef APP-NVUE */
+	.btn:hover {
+		opacity: 0.92;
+	}
+	/* #endif */
+
+	.btn:active {
+		opacity: 0.85;
+		/* #ifndef APP-NVUE */
+		transform: scale(0.98);
+		/* #endif */
+	}
+
+	.btn:focus {
+		box-shadow: 0 0 0 3px var(--focus-ring);
+	}
+
+	.btn:focus-visible {
+		box-shadow: 0 0 0 3px var(--focus-ring);
 	}
 
 	.form-input {

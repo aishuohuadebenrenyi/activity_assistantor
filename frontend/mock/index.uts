@@ -1,0 +1,111 @@
+
+import { config } from '@/utils/config.uts'
+import { MOCK_ACTIVITIES, MOCK_USER } from './data.uts'
+
+/**
+ * 模拟 API 延迟
+ */
+export const delay = (ms: number = 500): Promise<void> => {
+  return new Promise(resolve => setTimeout(resolve, ms));
+};
+
+/**
+ * 拦截请求并返回 Mock 数据
+ */
+export const handleMockRequest = async <T>(url: string, method: string, data: any | null): Promise<T> => {
+  await delay();
+  
+  console.log(`[Mock] ${method} ${url}`, data);
+  
+  if (url === '/activities' && method === 'GET') {
+    return MOCK_ACTIVITIES as T;
+  }
+  
+  if (url.startsWith('/activities/') && method === 'GET') {
+    const id = parseInt(url.split('/').pop() ?? '0');
+    const activity = MOCK_ACTIVITIES.find(a => a.id === id);
+    if (activity != null) return activity as T;
+  }
+  
+  if (url === '/activities' && method === 'POST') {
+    const payload = data != null ? data as UTSJSONObject : {} as UTSJSONObject;
+    const newActivity = {
+      ...payload,
+      id: Date.now(),
+      organizer_id: 1,
+      start_time: `${payload['date'] ?? ''}T${payload['time'] ?? ''}:00`,
+      views_count: 0,
+      status: 'upcoming',
+      checkin_records: [],
+      registrations: [],
+      created_at: new Date().toISOString()
+    };
+    return newActivity as T;
+  }
+  
+  if (url.startsWith('/activities/') && method === 'PUT') {
+    const id = parseInt(url.split('/').pop() ?? '0');
+    const activityIndex = MOCK_ACTIVITIES.findIndex(a => a.id === id);
+    const payload = data != null ? data as UTSJSONObject : {} as UTSJSONObject;
+    
+    if (activityIndex > -1) {
+        // 更新内存中的 Mock 数据以保持状态同步
+        const existing = MOCK_ACTIVITIES[activityIndex] as UTSJSONObject;
+        
+        // 合并基本字段
+        const updated = {
+            ...existing,
+            ...payload
+        };
+        
+        // 确保关键字段存在且格式正确 (Backend Model 格式)
+        if (payload['date'] != null && payload['time'] != null) {
+            updated['start_time'] = `${payload['date']}T${payload['time']}:00`;
+        }
+        
+        // 保持嵌套结构 (registrations, checkin_records)
+        updated['registrations'] = existing['registrations'];
+        updated['checkin_records'] = existing['checkin_records'];
+        updated['id'] = id; // 强制保持 ID
+        
+        MOCK_ACTIVITIES[activityIndex] = updated;
+        return updated as T;
+    }
+    
+    // 如果没找到，至少返回一个符合 ActivityResponse 格式的对象
+    return { 
+        ...payload, 
+        id: id, 
+        start_time: `${payload['date'] ?? '2023-01-01'}T${payload['time'] ?? '00:00'}:00`,
+        registrations: [],
+        checkin_records: [],
+        message: 'Updated successfully' 
+    } as T;
+  }
+  
+  if (url.includes('/checkin') && method === 'POST') {
+    return { message: 'Check-in successful', already_checked: false } as T;
+  }
+  
+  if (url.includes('/report') && method === 'POST') {
+     return { message: 'Report submitted' } as T;
+  }
+  
+  if (url.includes('/export') && method === 'POST') {
+    return { message: 'Export successful' } as T;
+  }
+  
+  if (url === '/auth/login' && method === 'POST') {
+    return { token: 'mock-jwt-token', user: MOCK_USER } as T;
+  }
+  
+  if (url === '/auth/login/wechat' && method === 'POST') {
+    return { token: 'mock-jwt-token', user: MOCK_USER } as T;
+  }
+  
+  if (url === '/feedback' && method === 'POST') {
+    return { message: 'Feedback submitted' } as T;
+  }
+
+  throw new Error(`Mock not implemented for ${method} ${url}`);
+};

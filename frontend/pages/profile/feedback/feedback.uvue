@@ -35,24 +35,20 @@
         isSubmitting: false
       }
     },
-    onLoad() {
-      logEvent('page_view', { page: 'feedback' })
-    },
     methods: {
       async submitFeedback() {
-        if (!this.content.trim()) {
+        if (!this.content) {
           uni.showToast({ title: '请输入反馈内容', icon: 'none' })
           return
         }
         
         this.isSubmitting = true
-        
         try {
-          // 尝试发送到服务器
-          // await request(new RequestOptions('/feedback', 'POST', { content: this.content, contact: this.contact }))
-          
-          // 模拟提交成功 (因为目前没有后端接口)
-          await new Promise(resolve => setTimeout(resolve, 1000))
+          // 统一使用 request，它会根据 USE_MOCK 自动处理
+          await request(new RequestOptions('/feedback', 'POST', { 
+            content: this.content, 
+            contact: this.contact 
+          }));
           
           logEvent('feedback_submit', { length: this.content.length, has_contact: !!this.contact })
           

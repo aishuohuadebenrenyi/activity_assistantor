@@ -64,13 +64,28 @@
 			</view>
 
 			<view class="auth-footer">
-				<text class="agreement" @click="openPrivacy">登录即表示同意 《隐私政策》 和 《服务条款》</text>
+				<view class="agreement-row" @click="agreed = !agreed">
+					<view :class="['checkbox', agreed ? 'checked' : '']">
+						<text v-if="agreed" class="check-mark">✓</text>
+					</view>
+					<text class="agreement-text">
+						我已阅读并同意
+						<text class="link" @click.stop="openPrivacy">《隐私政策》</text>
+						和
+						<text class="link" @click.stop="openTerms">《用户协议》</text>
+					</text>
+				</view>
 			</view>
 		</view>
 	</view>
 </template>
 
 <script>
+	import { logEvent } from '@/utils/analytics.uts'
+	import { request, RequestOptions } from '@/utils/request.uts'
+	import { activitiesState, User, saveToStorage } from '@/store/index.uts'
+	import { config } from '@/utils/config.uts'
+
 	export default {
 		data() {
 			return {
@@ -81,7 +96,8 @@
 				countdown: 0,
 				isLoggingIn: false,
 				topInset: 36,
-				countdownTimer: null as any
+				countdownTimer: null as any,
+				agreed: false
 			}
 		},
 		onLoad() {
@@ -118,8 +134,12 @@
 					}, 1000);
 				}, 600);
 			},
-			login() {
+			async login() {
 				if (this.isLoggingIn) return;
+				if (!this.agreed) {
+					uni.showToast({ title: '请阅读并同意隐私政策和用户协议', icon: 'none' });
+					return;
+				}
 				if (this.currentMethod === 'phone') {
 					if (!/^1\d{10}$/.test(this.phone)) {
 						uni.showToast({ title: '请输入正确手机号', icon: 'none' });
@@ -131,24 +151,68 @@
 					}
 				}
 				this.isLoggingIn = true;
-				setTimeout(() => {
+				try {
+					const res = await request<any>(new RequestOptions('/auth/login', 'POST', {
+						phone: this.phone,
+						code: this.code
+					}));
+					
 					this.isLoggingIn = false;
+					
+					// Store user in state
+					activitiesState.user = {
+						id: res.user.id,
+						phone: res.user.phone,
+						username: res.user.username,
+						avatar_url: res.user.avatar_url,
+						bio: res.user.bio,
+						is_certified: res.user.is_certified,
+						token: res.token
+					} as User;
+					
+					saveToStorage();
+					
 					uni.switchTab({
 						url: '/pages/activities/activities'
 					});
-				}, 800);
+				} catch (e) {
+					this.isLoggingIn = false;
+					// Error handled by request util
+				}
 			},
 			// #ifdef MP-WEIXIN
-			onGetPhoneNumber(e) {
+			async onGetPhoneNumber(e) {
 				console.log('getPhoneNumber', e);
+				if (!this.agreed) {
+					uni.showToast({ title: '请阅读并同意隐私政策和用户协议', icon: 'none' });
+					return;
+				}
 				if (e.detail.errMsg === "getPhoneNumber:ok") {
 					this.isLoggingIn = true;
-					// Mock login process
-					setTimeout(() => {
+					try {
+						const res = await request<any>(new RequestOptions('/auth/login/wechat', 'POST', {
+							code: e.detail.code
+						}));
 						this.isLoggingIn = false;
-						console.log('WeChat login success');
+						
+						// Store user in state
+						activitiesState.user = {
+							id: res.user.id,
+							phone: res.user.phone,
+							username: res.user.username,
+							avatar_url: res.user.avatar_url,
+							bio: res.user.bio,
+							is_certified: res.user.is_certified,
+							token: res.token
+						} as User;
+						
+						saveToStorage();
+						
 						uni.navigateBack();
-					}, 800);
+					} catch (err) {
+						this.isLoggingIn = false;
+						uni.showToast({ title: '登录失败', icon: 'none' });
+					}
 				} else {
 					uni.showToast({ title: '获取手机号失败', icon: 'none' });
 				}
@@ -157,6 +221,10 @@
 			loginWithApple() {
 				// #ifdef APP-IOS
 				if (this.isLoggingIn) return;
+				if (!this.agreed) {
+					uni.showToast({ title: '请阅读并同意隐私政策和用户协议', icon: 'none' });
+					return;
+				}
 				this.isLoggingIn = true;
 				uni.login({
 					provider: 'apple',
@@ -184,8 +252,18 @@
 				// #endif
 			},
 			openPrivacy() {
-				// TODO: 替换为实际的隐私政策 URL
-				const url = 'https://example.com/privacy.html';
+				const url = config.PRIVACY_POLICY_URL;
+				if (url != null) {
+					this.openUrl(url as string);
+				}
+			},
+			openTerms() {
+				const url = config.USER_AGREEMENT_URL;
+				if (url != null) {
+					this.openUrl(url as string);
+				}
+			},
+			openUrl(url: string) {
 				// #ifdef APP-PLUS
 				plus.runtime.openURL(url);
 				// #endif
@@ -203,17 +281,6 @@
 </script>
 
 <style scoped>
-	.apple-login-container {
-		margin-top: 16px;
-		height: 50px;
-		background-color: #000000;
-		border-radius: 8px;
-		flex-direction: row;
-		justify-content: center;
-		align-items: center;
-		width: 100%;
-	}
-
 	.apple-icon {
 		color: #FFFFFF;
 		font-size: 24px;
@@ -232,25 +299,26 @@
 	}
 
 	.auth-container {
-		padding: 20px 20px 40px;
+		padding: 32px 24px;
 		align-items: center;
 		justify-content: center;
 		flex: 1;
+		width: 100%;
 	}
 
 	.auth-header {
 		align-items: center;
-		margin-bottom: 60px;
+		margin-bottom: 48px;
 	}
 
 	.auth-logo {
-		width: 60px;
-		height: 60px;
+		width: 64px;
+		height: 64px;
 		background-color: #007AFF;
 		border-radius: 16px;
 		justify-content: center;
 		align-items: center;
-		margin-bottom: 20px;
+		margin-bottom: 16px;
 	}
 
 	.logo-icon {
@@ -265,15 +333,15 @@
 
 	.auth-form {
 		width: 100%;
-		max-width: 300px;
+		max-width: 320px;
 	}
 
 	.auth-methods {
 		flex-direction: row;
 		background-color: #FFFFFF;
-		border-radius: 8px;
+		border-radius: 10px;
 		padding: 4px;
-		margin-bottom: 30px;
+		margin-bottom: 32px;
 	}
 
 	.auth-method-btn {
@@ -281,7 +349,7 @@
 		height: 40px;
 		justify-content: center;
 		align-items: center;
-		border-radius: 6px;
+		border-radius: 8px;
 	}
 
 	.auth-method-btn.active {
@@ -289,27 +357,29 @@
 	}
 
 	.method-text {
-		font-size: 14px;
+		font-size: 15px;
 		color: #8E8E93;
 	}
 
 	.active-text {
 		color: #FFFFFF;
+		font-weight: 600;
 	}
 
 	.input {
-		height: 50px;
+		height: 52px;
 		background-color: #FFFFFF;
-		border-radius: 8px;
+		border-radius: 10px;
 		padding: 0 16px;
 		margin-bottom: 16px;
 		border: 1px solid #C6C6C8;
+		font-size: 16px;
 	}
 
 	.code-group {
 		flex-direction: row;
 		align-items: center;
-		margin-bottom: 24px;
+		margin-bottom: 32px;
 	}
 
 	.code-input {
@@ -319,26 +389,29 @@
 	}
 
 	.code-btn {
-		height: 50px;
-		padding: 0 16px;
-		border-radius: 8px;
+		height: 52px;
+		padding: 0 20px;
+		border-radius: 10px;
 		border: 1px solid #007AFF;
 		background-color: transparent;
 		justify-content: center;
 		align-items: center;
+		min-width: 110px;
 	}
 
 	.code-btn-text {
 		color: #007AFF;
-		font-size: 14px;
+		font-size: 15px;
+		font-weight: 500;
 	}
 
 	.submit-btn {
-		height: 50px;
+		height: 52px;
 		background-color: #007AFF;
-		border-radius: 8px;
+		border-radius: 26px;
 		justify-content: center;
 		align-items: center;
+		width: 100%;
 	}
 
 	.wechat-btn {
@@ -347,8 +420,20 @@
 
 	.submit-text {
 		color: #FFFFFF;
-		font-size: 16px;
+		font-size: 17px;
 		font-weight: 600;
+		text-align: center;
+	}
+
+	.apple-login-container {
+		margin-top: 24px;
+		height: 52px;
+		background-color: #000000;
+		border-radius: 26px;
+		flex-direction: row;
+		justify-content: center;
+		align-items: center;
+		width: 100%;
 	}
 
 	.wechat-form {
@@ -362,12 +447,48 @@
 	}
 
 	.auth-footer {
-		margin-top: 60px;
+		margin-top: 40px;
+		width: 100%;
+		max-width: 300px;
 	}
 
-	.agreement {
+	.agreement-row {
+		flex-direction: row;
+		align-items: flex-start;
+		justify-content: center;
+	}
+
+	.checkbox {
+		width: 16px;
+		height: 16px;
+		border: 1px solid #C7C7CC;
+		border-radius: 4px;
+		margin-right: 8px;
+		margin-top: 2px;
+		justify-content: center;
+		align-items: center;
+		background-color: #FFFFFF;
+	}
+
+	.checkbox.checked {
+		background-color: #007AFF;
+		border-color: #007AFF;
+	}
+
+	.check-mark {
+		color: #FFFFFF;
+		font-size: 10px;
+		font-weight: bold;
+	}
+
+	.agreement-text {
 		font-size: 12px;
-		color: #C7C7CC;
-		text-align: center;
+		color: #8E8E93;
+		line-height: 1.6;
+		flex: 1;
+	}
+
+	.link {
+		color: #007AFF;
 	}
 </style>
