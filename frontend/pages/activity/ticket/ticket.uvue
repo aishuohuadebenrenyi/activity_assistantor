@@ -1,13 +1,11 @@
 <template>
   <view class="container">
     <view v-if="activity != null" class="ticket-content">
-      <!-- 顶部状态栏：显示报名状态 -->
       <view class="status-bar">
           <text class="status-text">已报名</text>
           <text class="status-icon">✅</text>
       </view>
 
-      <!-- 核心凭证卡片：包含活动信息和二维码 -->
       <view class="ticket-card">
         <view class="header">
           <text class="title">{{ activity?.name }}</text>
@@ -26,9 +24,7 @@
         </view>
       </view>
 
-      <!-- 活动详细信息列表 -->
       <view class="info-card">
-          <!-- 地点信息，支持点击导航 -->
           <view class="info-row" @click="openLocation">
               <view class="info-icon-wrapper">
                   <text class="info-icon">📍</text>
@@ -42,7 +38,6 @@
           
           <view class="divider"></view>
           
-          <!-- 简介信息 -->
           <view class="info-row">
               <view class="info-icon-wrapper">
                   <text class="info-icon">📝</text>
@@ -55,7 +50,6 @@
           
           <view class="divider"></view>
           
-          <!-- 联系方式，支持点击拨号 -->
           <view class="info-row" @click="contactHost">
               <view class="info-icon-wrapper">
                   <text class="info-icon">📞</text>
@@ -68,10 +62,8 @@
           </view>
       </view>
 
-      <!-- 底部操作区 -->
       <view class="action-area">
         <!-- #ifdef MP-WEIXIN -->
-        <!-- 小程序端特有：扫码签到功能 -->
         <button class="action-btn primary-btn" @click="scanCheckIn">
             <text class="btn-icon">📷</text>
             <text class="btn-text">扫码签到</text>
@@ -99,12 +91,20 @@ type TicketResponse = {
     activity: any
 }
 
+type LocationInfo = {
+    latitude: number
+    longitude: number
+    name: string
+    address: string
+}
+
 export default {
   data() {
     return {
       activity: null as Activity | null,
       ticketCode: '',
-      qrCodeUrl: ''
+      qrCodeUrl: '',
+      locationInfo: null as LocationInfo | null
     }
   },
   onLoad(options) {
@@ -125,8 +125,6 @@ export default {
                 new RequestOptions(`/activities/${id}/my-ticket`, 'GET')
             )
             this.ticketCode = res.ticket_code
-            // Generate QR Code URL using a public API for simplicity
-            // The content is the base64 ticket code
             this.qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(this.ticketCode)}`
         } catch (e) {
             console.error('Fetch ticket failed', e)
@@ -134,10 +132,6 @@ export default {
         }
     },
     // #ifdef MP-WEIXIN
-    /**
-     * 扫码签到
-     * 调用微信扫码接口，扫描现场二维码进行签到。
-     */
     async scanCheckIn() {
       uni.scanCode({
         success: async (res) => {
@@ -169,7 +163,6 @@ export default {
             }
           } catch (e) {
             uni.hideLoading()
-            // Error handled by request util
             console.error('Checkin failed', e)
           }
         },
@@ -180,19 +173,98 @@ export default {
     },
     // #endif
     openLocation() {
-        if (this.activity?.location) {
-            uni.showToast({
-                title: '打开地图 (模拟)',
-                icon: 'none'
-            });
-            // In real app:
-            // uni.openLocation({ ... })
+        if (!this.activity?.location) {
+            uni.showToast({ title: '地点待定', icon: 'none' })
+            return
         }
+        
+        if (this.locationInfo != null) {
+            this.doOpenLocation(this.locationInfo)
+            return
+        }
+        
+        uni.showLoading({ title: '获取位置信息...' })
+        
+        uni.request({
+            url: 'https://apis.map.qq.com/ws/geocoder/v1/',
+            data: {
+                address: this.activity!.location,
+                key: 'YOUR_TENCENT_MAP_KEY'
+            },
+            success: (res) => {
+                uni.hideLoading()
+                const data = res.data as any
+                if (data.status === 0 && data.result) {
+                    const loc = data.result.location
+                    this.locationInfo = {
+                        latitude: loc.lat,
+                        longitude: loc.lng,
+                        name: this.activity!.name,
+                        address: this.activity!.location
+                    }
+                    this.doOpenLocation(this.locationInfo!)
+                } else {
+                    this.openLocationFallback()
+                }
+            },
+            fail: () => {
+                uni.hideLoading()
+                this.openLocationFallback()
+            }
+        })
+    },
+    doOpenLocation(loc: LocationInfo) {
+        uni.openLocation({
+            latitude: loc.latitude,
+            longitude: loc.longitude,
+            name: loc.name,
+            address: loc.address,
+            scale: 18,
+            success: () => {
+                console.log('Open location success')
+            },
+            fail: (err) => {
+                console.error('Open location failed', err)
+                uni.showToast({ title: '打开地图失败', icon: 'none' })
+            }
+        })
+    },
+    openLocationFallback() {
+        uni.showModal({
+            title: '提示',
+            content: `活动地点：${this.activity?.location || '地点待定'}\n\n是否复制地址到地图APP搜索？`,
+            confirmText: '复制地址',
+            success: (res) => {
+                if (res.confirm) {
+                    uni.setClipboardData({
+                        data: this.activity?.location || '',
+                        success: () => {
+                            uni.showToast({ title: '地址已复制', icon: 'success' })
+                        }
+                    })
+                }
+            }
+        })
     },
     contactHost() {
-        uni.makePhoneCall({
-            phoneNumber: '13800138000' // Mock number
-        });
+        const hostPhone = this.activity?.host_phone || '13800138000'
+        
+        uni.showModal({
+            title: '联系主办方',
+            content: `是否拨打 ${hostPhone}？`,
+            confirmText: '拨打',
+            success: (res) => {
+                if (res.confirm) {
+                    uni.makePhoneCall({
+                        phoneNumber: hostPhone,
+                        fail: (err) => {
+                            console.error('Make phone call failed', err)
+                            uni.showToast({ title: '拨号失败', icon: 'none' })
+                        }
+                    })
+                }
+            }
+        })
     },
     goHome() {
         // #ifdef MP-WEIXIN
@@ -254,7 +326,6 @@ export default {
   overflow: hidden;
 }
 
-/* 锯齿边缘效果模拟 - 可选 */
 .ticket-card::after {
     content: '';
     position: absolute;

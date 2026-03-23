@@ -5,6 +5,7 @@ export interface CheckinRecord {
    * 注意：该结构来自后端 checkin_records + registrations 的组合映射（见 store/index.uts）。
    */
   id: number;
+  registrationId: number;
   name: string;
   phone: string;
   time: string;
@@ -39,6 +40,7 @@ export interface Activity {
   checkins: number;
   views: number;
   status: string; // 'upcoming', 'ongoing', 'ended'
+  host_phone: string | null;
   checkinRecords: CheckinRecord[];
   registrations: Registration[];
   createdAt: string;

@@ -19,8 +19,22 @@ class Config:
     # 默认使用本地 SQLite 数据库 (app.db)，生产环境建议使用云数据库（如 RDS MySQL/PostgreSQL）
     SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL') or 'sqlite:///app.db'
 
+    # 数据库连接池配置 (适用于 FC 部署场景)
+    # 连接池大小：FC 单实例并发有限，连接池不宜过大
+    SQLALCHEMY_POOL_SIZE = int(os.environ.get('SQLALCHEMY_POOL_SIZE', 5))
+    # 连接回收时间：FC 实例可能长时间不活动，需定期回收连接
+    SQLALCHEMY_POOL_RECYCLE = int(os.environ.get('SQLALCHEMY_POOL_RECYCLE', 300))
+    # 连接健康检查：每次使用前检查连接是否有效
+    SQLALCHEMY_POOL_PRE_PING = True
+    # 最大溢出连接数
+    SQLALCHEMY_MAX_OVERFLOW = int(os.environ.get('SQLALCHEMY_MAX_OVERFLOW', 2))
+
     # 禁用 SQLAlchemy 修改跟踪，以减少内存开销
     SQLALCHEMY_TRACK_MODIFICATIONS = False
+
+    # Redis 连接配置
+    # 用于验证码存储、限流计数、Session 缓存等
+    REDIS_URL = os.environ.get('REDIS_URL')
     
     # 阿里云函数计算 (FC) 服务名称配置
     # 用于识别当前运行的云服务上下文，支持日志链路追踪及多环境隔离

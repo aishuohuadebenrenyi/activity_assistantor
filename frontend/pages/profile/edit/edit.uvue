@@ -35,6 +35,8 @@
 </template>
 
 <script>
+	import { deleteUserAccount, activitiesState } from '@/store/index.uts'
+	
 	export default {
 		data() {
 			return {
@@ -42,6 +44,12 @@
 				phone: '13800138000',
 				role: '官方认证',
 				bio: '致力于提供最好的活动管理服务。'
+			}
+		},
+		onLoad() {
+			if (activitiesState.user != null) {
+				this.username = activitiesState.user.username || '主办方用户'
+				this.phone = activitiesState.user.phone || ''
 			}
 		},
 		methods: {
@@ -68,6 +76,8 @@
 					content: '确定要退出当前账号吗？',
 					success: (res) => {
 						if (res.confirm) {
+							uni.removeStorageSync('user_data');
+							uni.removeStorageSync('token');
 							uni.reLaunch({ url: '/pages/auth/login' });
 						}
 					}
@@ -80,14 +90,45 @@
 					confirmColor: '#FF3B30',
 					success: (res) => {
 						if (res.confirm) {
-							// TODO: 调用注销接口
-							uni.showToast({ title: '账号已注销', icon: 'none' });
-							setTimeout(() => {
-								uni.reLaunch({ url: '/pages/auth/login' });
-							}, 1500);
+							this.doDeleteAccount();
 						}
 					}
 				});
+			},
+			async doDeleteAccount() {
+				uni.showLoading({ title: '处理中...' });
+				try {
+					const result = await deleteUserAccount(false);
+					uni.hideLoading();
+					
+					if (result.status === 'pending_deletion') {
+						uni.showModal({
+							title: '注销申请已提交',
+							content: '您的账号已进入 15 天冷静期。冷静期内您可以随时登录恢复账号；15 天后您的所有数据将被永久清除。',
+							showCancel: false,
+							success: () => {
+								uni.reLaunch({ url: '/pages/auth/login' });
+							}
+						});
+					} else if (result.status === 'success') {
+						uni.showToast({ title: '账号已永久注销', icon: 'none' });
+						setTimeout(() => {
+							uni.reLaunch({ url: '/pages/auth/login' });
+						}, 1500);
+					} else {
+						uni.showToast({ title: result.message || '注销成功', icon: 'none' });
+						setTimeout(() => {
+							uni.reLaunch({ url: '/pages/auth/login' });
+						}, 1500);
+					}
+				} catch (e) {
+					uni.hideLoading();
+					console.error('注销账号失败', e);
+					uni.showToast({ 
+						title: '注销失败，请稍后再试', 
+						icon: 'none' 
+					});
+				}
 			}
 		}
 	}

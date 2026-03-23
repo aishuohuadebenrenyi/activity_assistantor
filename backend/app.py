@@ -55,12 +55,12 @@ def create_app(config_class=Config):
 
     init_request_id(app)
     
-    # 初始化安全限制 (频率限制)
+    storage_uri = app.config.get('REDIS_URL') or "memory://"
     limiter = Limiter(
         get_remote_address,
         app=app,
         default_limits=["200 per day", "50 per hour"],
-        storage_uri="memory://",
+        storage_uri=storage_uri,
     )
     
     # 启用 Talisman (强制 HTTPS, 设置安全响应头)
@@ -114,6 +114,13 @@ def create_app(config_class=Config):
             "status": "online",
             "message": "Activity Assistant Backend API is running",
             "docs": "/api/activities"
+        }
+
+    @app.route('/health')
+    def health():
+        return {
+            "status": "ok",
+            "service": "activity-assistant-api"
         }
 
     @app.route('/legal/privacy', strict_slashes=False)

@@ -1,0 +1,65 @@
+edition: 1.0.0
+name: activity-assistant
+access: default
+
+vars:
+  region: cn-hangzhou
+  serviceName: activity-assistant-api
+  functionName: flask-api
+
+services:
+  activity-assistant:
+    component: fc
+    props:
+      region: ${vars.region}
+      service:
+        name: ${vars.serviceName}
+        description: 活动帮手后端服务
+        internetAccess: true
+        logConfig: auto
+        vpcConfig:
+          vpcId: ${env.VPC_ID}
+          vswitchIds:
+            - ${env.VSWITCH_ID}
+        nasConfig: auto
+      function:
+        name: ${vars.functionName}
+        description: Flask API 函数
+        runtime: python3.9
+        codeUri: ./
+        handler: fc_handler.handler
+        memorySize: 512
+        timeout: 30
+        instanceConcurrency: 10
+        instanceType: e1
+        environmentVariables:
+          SECRET_KEY: ${env.SECRET_KEY}
+          DATABASE_URL: ${env.DATABASE_URL}
+          REDIS_URL: ${env.REDIS_URL}
+          WECHAT_APPID: ${env.WECHAT_APPID}
+          WECHAT_SECRET: ${env.WECHAT_SECRET}
+          FC_SERVICE_NAME: ${vars.serviceName}
+      triggers:
+        - name: httpTrigger
+          type: http
+          config:
+            authType: anonymous
+            methods:
+              - GET
+              - POST
+              - PUT
+              - DELETE
+              - PATCH
+              - HEAD
+              - OPTIONS
+      customDomains:
+        - domainName: ${env.API_DOMAIN}
+          protocol: HTTP,HTTPS
+          certConfig:
+            certName: ${env.SSL_CERT_NAME}
+            certificate: ${env.SSL_CERT}
+            privateKey: ${env.SSL_KEY}
+          routeConfigs:
+            - path: /*
+              serviceName: ${vars.serviceName}
+              functionName: ${vars.functionName}

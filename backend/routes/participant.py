@@ -15,6 +15,7 @@ from flask import Blueprint, request, jsonify, current_app
 from ..models import db, Registration, CheckinRecord, Activity
 from ..utils.auth import auth_required
 from ..utils.idempotency import idempotent
+from ..services.email_service import EmailService
 import csv
 import io
 
@@ -34,7 +35,6 @@ def get_participants(activity_id):
     - 403: 非组织者无权限查看；
     - 404: 活动不存在。
     """
-    # Ensure activity exists and user is organizer
     activity = Activity.query.get_or_404(activity_id)
     if activity.user_id != request.user.id:
         return jsonify({'error': '没有权限查看报名名单'}), 403
@@ -67,7 +67,7 @@ def register(activity_id):
 
     业务规则：
     - 以 (activity_id, phone) 判断重复报名；重复则返回错误；
-    - 当前 Registration 模型未强制绑定 user_id，因此允许“代报名”或未实名场景。
+    - 当前 Registration 模型未强制绑定 user_id，因此允许"代报名"或未实名场景。
 
     返回：
     - 201: 报名成功，返回 Registration；
@@ -80,7 +80,6 @@ def register(activity_id):
     if not name or not phone:
         return jsonify({'error': 'Missing name or phone'}), 400
         
-    # Check duplicate
     existing = Registration.query.filter_by(activity_id=activity_id, phone=phone).first()
     if existing:
         return jsonify({'error': '您已经报名过此活动'}), 400
@@ -101,9 +100,9 @@ def export_participants(activity_id):
     Body（JSON）：
     - email: 接收导出的邮箱（必填）
 
-    当前实现说明：
+    实现：
     - 以 CSV 格式生成内容；
-    - 发送邮件逻辑为 Mock（仅打印），用于演示“异步导出”交互；
+    - 使用 EmailService 发送邮件（支持 Mock/生产双模式）；
     - 对外响应使用 202 Accepted，表示请求已受理。
 
     返回：
@@ -120,21 +119,59 @@ def export_participants(activity_id):
     if not email:
         return jsonify({'error': '未提供导出邮箱'}), 400
         
-    # Generate CSV
     registrations = Registration.query.filter_by(activity_id=activity_id).all()
     
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow(['ID', '姓名', '电话', '报名时间', '是否签到'])
+    writer.writerow(['ID', '姓名', '电话', '报名时间', '是否签到', '签到时间'])
     
     for reg in registrations:
-        checked_in = "是" if reg.checkin_record else "否"
-        writer.writerow([reg.id, reg.name, reg.phone, reg.created_at.isoformat(), checked_in])
+        checkin = CheckinRecord.query.filter_by(registration_id=reg.id).first()
+        checked_in = "是" if checkin else "否"
+        checkin_time = checkin.checkin_time.isoformat() if checkin else ""
+        writer.writerow([reg.id, reg.name, reg.phone, reg.created_at.isoformat(), checked_in, checkin_time])
     
     csv_content = output.getvalue()
     
-    # Mock Email Sending
-    print(f"DEBUG: [EMAIL SERVICE] Sending participant list of '{activity.name}' to {email}")
-    print(f"DEBUG: CSV Content:\n{csv_content}")
+    success = EmailService.send_participant_export(email, activity.name, csv_content)
     
-    return jsonify({'message': '导出请求已接收，报名名单将在3个工作日内发送至您的邮箱'}), 202
+    if success:
+        return jsonify({'message': '报名名单已发送至您的邮箱，请查收'}), 202
+    else:
+        return jsonify({'message': '导出请求已接收，报名名单将在3个工作日内发送至您的邮箱'}), 202
+
+@participant_bp.route('/<int:activity_id>/checkin/<int:registration_id>', methods=['DELETE'])
+@auth_required
+def cancel_checkin(activity_id, registration_id):
+    """
+    取消签到（仅组织者可操作）。
+
+    参数：
+    - activity_id: 活动 ID（路径参数）
+    - registration_id: 报名记录 ID（路径参数）
+
+    业务规则：
+    - 仅活动组织者可取消签到；
+    - 签到记录被删除后，报名状态恢复为未签到。
+
+    返回：
+    - 200: 取消成功；
+    - 403: 非组织者无权限；
+    - 404: 活动或签到记录不存在。
+    """
+    activity = Activity.query.get_or_404(activity_id)
+    if activity.user_id != request.user.id:
+        return jsonify({'error': '没有权限操作'}), 403
+    
+    registration = Registration.query.get_or_404(registration_id)
+    if registration.activity_id != activity_id:
+        return jsonify({'error': '报名记录不属于该活动'}), 400
+    
+    checkin = CheckinRecord.query.filter_by(registration_id=registration_id).first()
+    if not checkin:
+        return jsonify({'error': '该报名尚未签到'}), 400
+    
+    db.session.delete(checkin)
+    db.session.commit()
+    
+    return jsonify({'message': '签到已取消', 'registration_id': registration_id})

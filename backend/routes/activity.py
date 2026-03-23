@@ -21,6 +21,9 @@ from ..services.wechat_service import WeChatService
 from ..utils.auth import auth_required
 from ..utils.idempotency import idempotent
 from datetime import datetime
+import logging
+
+logger = logging.getLogger(__name__)
 
 activity_bp = Blueprint('activity', __name__)
 
@@ -36,6 +39,8 @@ def get_activities():
     返回：
     - 200: 活动数组（列表场景不包含报名/签到明细，减少流量与敏感信息暴露）。
     """
+    logger.info("[ACTIVITY] 获取活动列表请求")
+    
     status = request.args.get('status')
     search = request.args.get('search')
     
@@ -43,12 +48,15 @@ def get_activities():
     
     if status and status != 'all':
         query = query.filter_by(status=status)
+        logger.debug(f"[ACTIVITY] 筛选状态: {status}")
         
     if search:
         query = query.filter(Activity.name.contains(search) | Activity.location.contains(search))
+        logger.debug(f"[ACTIVITY] 搜索关键词: {search}")
         
     activities = query.order_by(Activity.start_time.desc()).all()
-    # 列表页不返回报名详情，减少流量消耗且更安全
+    logger.info(f"[ACTIVITY] 返回 {len(activities)} 个活动")
+    
     return jsonify([a.to_dict(include_registrations=False) for a in activities])
 
 @activity_bp.route('/', methods=['POST'])

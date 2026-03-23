@@ -113,6 +113,7 @@
 					checkins: 0,
 					views: 0,
 					status: '',
+					host_phone: null,
 					checkinRecords: [],
 					registrations: [],
 					createdAt: ''

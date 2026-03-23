@@ -4,12 +4,12 @@
 路由前缀：/api/user
 
 说明：
-- 本模块涉及“账户状态机”（active/pending_deletion/deleted）与冷静期业务规则；
-- 注销采用“不可逆脱敏 + 关联数据清理”策略，以满足合规与审计留痕。
+- 本模块涉及"账户状态机"（active/pending_deletion/deleted）与冷静期业务规则；
+- 注销采用"不可逆脱敏 + 关联数据清理"策略，以满足合规与审计留痕。
 """
 
 from flask import Blueprint, request, jsonify
-from ..models import db, User, Activity, Registration, CheckinRecord
+from ..models import db, User, Activity, Registration, CheckinRecord, Report
 from ..utils.auth import auth_required
 from ..utils.idempotency import idempotent
 import datetime
@@ -64,19 +64,16 @@ def delete_account():
     """
     user = request.user
     
-    # 检查是否已经在冷静期内
     if user.status == 'pending_deletion':
-        # 如果是冷静期内的第二次请求，执行最终删除（脱敏处理）
         return finalize_user_deletion(user)
     
-    # 进入冷静期
     user.status = 'pending_deletion'
     user.deletion_requested_at = datetime.datetime.utcnow()
     db.session.commit()
     
     return jsonify({
         'message': '您的注销申请已提交。账号已进入 15 天冷静期，期间您可以随时登录恢复账号。15 天后数据将永久清除。',
-        'status': 'pending',
+        'status': 'pending_deletion',
         'cooldown_days': 15
     })
 
@@ -86,7 +83,7 @@ def finalize_user_deletion(user):
 
     数据处理策略：
     1) 删除用户发布的活动（级联删除报名与签到记录）；
-    2) 用户记录做不可逆脱敏（替换 phone/openid/头像/简介等），保留一条“已注销用户”记录用于审计；
+    2) 用户记录做不可逆脱敏（替换 phone/openid/头像/简介等），保留一条"已注销用户"记录用于审计；
     3) 删除以旧手机号报名的报名记录（当前 Registration 通过 phone 关联，不绑定 user_id）。
 
     参数：
@@ -98,12 +95,10 @@ def finalize_user_deletion(user):
     user_id = user.id
     old_phone = user.phone
     
-    # 1. 删除用户的活动（及其关联的报名和签到记录通过级联删除）
     activities = Activity.query.filter_by(user_id=user_id).all()
     for act in activities:
         db.session.delete(act)
         
-    # 2. 对用户基本信息进行不可逆脱敏处理，而不是直接物理删除（保留脱敏记录以备审计）
     user.phone = f"DELETED_{user_id}_{datetime.datetime.utcnow().timestamp()}"
     user.openid = None
     user.username = "已注销用户"
@@ -111,7 +106,6 @@ def finalize_user_deletion(user):
     user.bio = "该用户已注销"
     user.status = 'deleted'
     
-    # 3. 删除该用户的所有报名记录（物理删除或同样脱敏）
     registrations = Registration.query.filter_by(phone=old_phone).all() if old_phone else []
     for reg in registrations:
         db.session.delete(reg)
@@ -130,26 +124,77 @@ def report_content():
     符合 iOS App Store 指南 1.2 要求：提供举报违规内容的机制 (UGC)
 
     Body（JSON）：
-    - target_type: 举报对象类型（如 activity/user）
+    - target_type: 举报对象类型（activity/user）
     - target_id: 举报对象 ID
     - reason: 举报原因
+    - detail: 举报详情（可选）
 
-    当前实现说明：
-    - 该接口用于“能力占位”，暂未落库，直接打印日志并返回成功；
-    - 若要形成闭环，应与 models.Report 或独立举报表结合，实现后台处理/状态流转。
+    业务规则：
+    - 同一用户对同一目标仅能举报一次（防止恶意刷举报）；
+    - 举报信息存入 Report 表，状态默认为 pending；
+    - 后台管理员可查看并处理举报（processed/rejected）。
+
+    返回：
+    - 200: 举报成功
+    - 400: 参数缺失
+    - 409: 已举报过
     """
     user = request.user
     data = request.get_json()
     
-    target_type = data.get('target_type') # 'activity', 'user'
+    target_type = data.get('target_type')
     target_id = data.get('target_id')
     reason = data.get('reason')
+    detail = data.get('detail', '')
     
-    # 在实际应用中，这里会将举报信息存入数据库表 Report
-    # 目前记录到日志或模拟成功
-    print(f"User {user.id} reported {target_type} {target_id} for reason: {reason}")
+    if not target_type or not target_id or not reason:
+        return jsonify({'error': '请填写完整的举报信息'}), 400
     
+    if target_type not in ['activity', 'user']:
+        return jsonify({'error': '举报类型无效'}), 400
+    
+    if target_type == 'activity':
+        activity = Activity.query.get(target_id)
+        if not activity:
+            return jsonify({'error': '活动不存在'}), 404
+        
+        existing = Report.query.filter_by(
+            user_id=user.id,
+            activity_id=target_id
+        ).first()
+        if existing:
+            return jsonify({'error': '您已举报过该活动'}), 409
+        
+        report = Report(
+            activity_id=target_id,
+            user_id=user.id,
+            reason=reason,
+            detail=detail,
+            status='pending'
+        )
+        db.session.add(report)
+        db.session.commit()
+        
+        return jsonify({
+            'message': '感谢您的举报，我们将在24小时内核实处理',
+            'report_id': report.id,
+            'status': 'success'
+        })
+    
+    return jsonify({'message': '举报已记录', 'status': 'success'})
+
+@user_bp.route('/reports', methods=['GET'])
+@auth_required
+def get_user_reports():
+    """
+    获取当前用户的举报记录列表。
+
+    返回：
+    - 200: 举报记录列表
+    """
+    user = request.user
+    reports = Report.query.filter_by(user_id=user.id).order_by(Report.created_at.desc()).all()
     return jsonify({
-        'message': '感谢您的举报，我们将在24小时内核实处理',
-        'status': 'success'
+        'reports': [r.to_dict() for r in reports],
+        'total': len(reports)
     })

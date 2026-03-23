@@ -127,6 +127,7 @@ class Activity(db.Model):
             'status': self.status,
             'views_count': self.views_count,
             'created_at': self.created_at.isoformat(),
+            'host_phone': self.organizer.phone if self.organizer else None,
         }
         
         if include_registrations:

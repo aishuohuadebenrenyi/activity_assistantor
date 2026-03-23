@@ -131,6 +131,7 @@ type ActivityResponse = {
   status: string;
   views_count: number;
   created_at: string;
+  host_phone: string | null;
   registrations: RegistrationResponse[];
   checkin_records: CheckinRecordResponse[];
 }
@@ -160,6 +161,7 @@ function mapBackendToFrontend(data: ActivityResponse): Activity {
       
       checkinRecords.push({
         id: c.id,
+        registrationId: c.registration_id,
         name: reg?.name ?? '未知',
         phone: reg?.phone ?? '',
         time: timeString
@@ -194,6 +196,7 @@ function mapBackendToFrontend(data: ActivityResponse): Activity {
     checkins: data.checkin_records?.length ?? 0,
     views: data.views_count,
     status: data.status,
+    host_phone: data.host_phone ?? null,
     checkinRecords: checkinRecords,
     registrations: registrations,
     createdAt: data.created_at

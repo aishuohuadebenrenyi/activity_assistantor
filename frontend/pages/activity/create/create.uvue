@@ -156,6 +156,7 @@
 					capacity: this.form.capacity,
 					description: this.form.description,
 					views: 0,
+					host_phone: null,
 					checkinRecords: [],
 					registrations: [],
 					type: this.form.theme,

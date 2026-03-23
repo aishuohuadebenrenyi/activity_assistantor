@@ -159,6 +159,7 @@ type Participant = {
 					checkins: 0,
 					views: 0,
 					status: '',
+					host_phone: null,
 					checkinRecords: [],
 					registrations: [],
 					createdAt: ''
@@ -337,6 +338,7 @@ type Participant = {
 					const timeStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
 					currentActivity.checkinRecords.push({
 						id: Date.now(),
+						registrationId: registrationId,
 						name: reg.name,
 						phone: reg.phone,
 						time: timeStr
@@ -368,28 +370,48 @@ type Participant = {
 				
 				try {
 					if (participant.checked) {
-						// 取消签到
-						// 寻找签到记录 ID。在前端 store 中 checkinRecords 目前是 Activity 的一部分。
-						// 但后端没有提供取消签到的直接 registration_id 接口，而是 record_id。
-						// 为了简化，我们只支持签到，取消签到暂不实现或仅在本地模拟。
-						// 或者我们可以调用后端取消签到接口。
-						// 查找 record_id
-						// 后端 participant.py 中有 cancel_checkin: /<int:activity_id>/checkin/<int:record_id>
-						
-						// 这里我们需要先获取 record_id。
-						// 目前前端模型没有存储 record_id 在 registration 中。
-						// 暂时只实现签到逻辑。
-						uni.showToast({ title: '目前仅支持签到，不支持手动取消', icon: 'none' });
+						uni.showModal({
+							title: '确认取消签到',
+							content: `确定要取消 ${participant.name} 的签到状态吗？`,
+							success: async (res) => {
+								if (res.confirm) {
+									await this.doCancelCheckin(participant);
+								}
+							}
+						});
+						uni.hideLoading();
 					} else {
-						// 执行签到
 						await request(new RequestOptions(`/participants/${this.activityId}/checkin`, 'POST', { registration_id: participant.id }));
 						await this.updateLocalCheckinStatus(participant.id);
+						uni.hideLoading();
 						uni.showToast({ title: '签到成功', icon: 'success' });
 					}
 				} catch (e) {
-					console.error('Checkin toggle failed', e);
-				} finally {
 					uni.hideLoading();
+					console.error('Checkin toggle failed', e);
+				}
+			},
+			async doCancelCheckin(participant: Participant) {
+				uni.showLoading({ title: '取消签到中...' });
+				try {
+					await request(new RequestOptions(`/participants/${this.activityId}/checkin/${participant.id}`, 'DELETE'));
+					
+					const currentActivity = activitiesState.activities.find((a: Activity): boolean => a.id === this.activityId);
+					if (currentActivity != null) {
+						const updatedRecords = currentActivity.checkinRecords.filter(
+							(r: CheckinRecord): boolean => r.registrationId !== participant.id
+						);
+						currentActivity.checkinRecords = updatedRecords;
+						currentActivity.checkins = updatedRecords.length;
+						await updateActivity(currentActivity);
+					}
+					
+					uni.hideLoading();
+					uni.showToast({ title: '签到已取消', icon: 'success' });
+				} catch (e) {
+					uni.hideLoading();
+					console.error('Cancel checkin failed', e);
+					uni.showToast({ title: '取消签到失败', icon: 'none' });
 				}
 			},
 			goHome() {

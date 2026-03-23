@@ -13,13 +13,11 @@
 			<view v-else>
 			<view class="share-card card">
 				<view class="card-content poster-content">
-					<!-- 海报头部 -->
 					<view class="poster-header">
 						<text class="app-name">活动帮手</text>
 						<text class="poster-title">诚邀您参加</text>
 					</view>
 					
-					<!-- 活动信息 -->
 					<view class="activity-info">
 						<text class="activity-name">{{ activity.name }}</text>
 						
@@ -39,7 +37,6 @@
 						</view>
 					</view>
 					
-					<!-- 二维码区域 -->
 					<view class="qr-section">
 						<view class="qr-code">
 							<image v-if="qrcodeData" :src="qrcodeData" class="qr-image" mode="aspectFit"></image>
@@ -52,7 +49,6 @@
 				</view>
 			</view>
 
-			<!-- 底部操作栏 -->
 			<view class="action-bar">
 				<button class="btn btn-secondary" @click="copyLink" hover-class="hover-opacity">
 					<text class="btn-text secondary-text">复制链接</text>
@@ -109,6 +105,7 @@
 					checkins: 0,
 					views: 0,
 					status: '',
+					host_phone: null,
 					checkinRecords: [],
 					registrations: [],
 					createdAt: ''
@@ -164,13 +161,81 @@
 					return;
 				}
 
-				uni.showLoading({ title: '保存海报中...' });
-				// 实际项目中这里应实现将 Base64 转为图片并保存的逻辑
-				// 或者使用 Canvas 绘制海报
-				setTimeout(() => {
+				this.saveQRCodeToAlbum();
+			},
+			async saveQRCodeToAlbum() {
+				uni.showLoading({ title: '保存中...' });
+				
+				try {
+					if (this.qrcodeData.startsWith('data:image')) {
+						const base64Data = this.qrcodeData.split(',')[1];
+						
+						const filePath = `${uni.env.USER_DATA_PATH}/poster_${this.activityId}_${Date.now()}.png`;
+						
+						const fs = uni.getFileSystemManager();
+						fs.writeFile({
+							filePath: filePath,
+							data: base64Data,
+							encoding: 'base64',
+							success: () => {
+								uni.saveImageToPhotosAlbum({
+									filePath: filePath,
+									success: () => {
+										uni.hideLoading();
+										uni.showToast({ title: '已保存到相册', icon: 'success' });
+									},
+									fail: (err) => {
+										uni.hideLoading();
+										if (err.errMsg.indexOf('auth deny') !== -1) {
+											uni.showModal({
+												title: '提示',
+												content: '需要您授权保存相册权限，请在系统设置中开启',
+												confirmText: '我知道了',
+												showCancel: false
+											});
+										} else {
+											uni.showToast({ title: '保存失败', icon: 'none' });
+										}
+									}
+								});
+							},
+							fail: () => {
+								uni.hideLoading();
+								uni.showToast({ title: '文件写入失败', icon: 'none' });
+							}
+						});
+					} else {
+						uni.downloadFile({
+							url: this.qrcodeData,
+							success: (res) => {
+								if (res.statusCode === 200) {
+									uni.saveImageToPhotosAlbum({
+										filePath: res.tempFilePath,
+										success: () => {
+											uni.hideLoading();
+											uni.showToast({ title: '已保存到相册', icon: 'success' });
+										},
+										fail: (err) => {
+											uni.hideLoading();
+											uni.showToast({ title: '保存失败', icon: 'none' });
+										}
+									});
+								} else {
+									uni.hideLoading();
+									uni.showToast({ title: '下载失败', icon: 'none' });
+								}
+							},
+							fail: () => {
+								uni.hideLoading();
+								uni.showToast({ title: '下载失败', icon: 'none' });
+							}
+						});
+					}
+				} catch (e) {
 					uni.hideLoading();
-					uni.showToast({ title: '海报已保存到相册', icon: 'success' });
-				}, 1500);
+					console.error('Save poster failed', e);
+					uni.showToast({ title: '保存失败，请重试', icon: 'none' });
+				}
 			},
 			goHome() {
 				uni.switchTab({

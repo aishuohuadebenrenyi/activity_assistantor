@@ -55,7 +55,6 @@
 				</view>
 				
 				<!-- #ifdef APP-IOS -->
-				<!-- Apple 登录 (iOS 强制要求) -->
 				<view class="apple-login-container" :style="{ opacity: isLoggingIn ? 0.5 : 1 }" @click="loginWithApple" hover-class="hover-opacity">
 					<text class="apple-icon"></text>
 					<text class="apple-text">{{ isLoggingIn ? '登录中...' : '通过 Apple 登录' }}</text>
@@ -86,6 +85,27 @@
 	import { activitiesState, User, saveToStorage } from '@/store/index.uts'
 	import { config } from '@/utils/config.uts'
 
+	type AppleLoginResult = {
+		identity_token: string | null
+		user_identifier: string | null
+		email: string | null
+		full_name: string | null
+	}
+
+	type LoginUser = {
+		id: number
+		phone: string | null
+		username: string | null
+		avatar_url: string | null
+		bio: string | null
+		is_certified: boolean
+	}
+
+	type LoginResponse = {
+		token: string
+		user: LoginUser
+	}
+
 	export default {
 		data() {
 			return {
@@ -101,11 +121,14 @@
 			}
 		},
 		onLoad() {
+			console.log('[LOGIN] 页面加载')
 			const systemInfo = uni.getSystemInfoSync();
 			const safeTop = systemInfo.safeAreaInsets ? systemInfo.safeAreaInsets.top : 0;
 			this.topInset = safeTop > 0 ? safeTop : 36;
+			console.log(`[LOGIN] 安全区域顶部距离: ${this.topInset}`)
 		},
 		onUnload() {
+			console.log('[LOGIN] 页面卸载')
 			if (this.countdownTimer != null) {
 				clearInterval(this.countdownTimer);
 				this.countdownTimer = null;
@@ -113,28 +136,37 @@
 		},
 		methods: {
 			sendCode() {
+				console.log('[LOGIN] 发送验证码请求')
 				if (this.isSendingCode || this.countdown > 0) return;
 				if (!/^1\d{10}$/.test(this.phone)) {
 					uni.showToast({ title: '请输入正确手机号', icon: 'none' });
 					return;
 				}
 				this.isSendingCode = true;
-				setTimeout(() => {
-					this.isSendingCode = false;
-					this.countdown = 60;
-					uni.showToast({ title: '验证码已发送' });
-					this.countdownTimer = setInterval(() => {
-						if (this.countdown <= 1) {
-							clearInterval(this.countdownTimer);
-							this.countdownTimer = null;
-							this.countdown = 0;
-							return;
-						}
-						this.countdown -= 1;
-					}, 1000);
-				}, 600);
+				
+				request<any>(new RequestOptions('/auth/send-code', 'POST', { phone: this.phone }))
+					.then(() => {
+						console.log(`[LOGIN] 验证码发送成功: ${this.phone.substring(0, 3)}****${this.phone.substring(7)}`)
+						this.isSendingCode = false;
+						this.countdown = 60;
+						uni.showToast({ title: '验证码已发送' });
+						this.countdownTimer = setInterval(() => {
+							if (this.countdown <= 1) {
+								clearInterval(this.countdownTimer);
+								this.countdownTimer = null;
+								this.countdown = 0;
+								return;
+							}
+							this.countdown -= 1;
+						}, 1000);
+					})
+					.catch((e) => {
+						console.error('[LOGIN] 验证码发送失败', e)
+						this.isSendingCode = false;
+					});
 			},
 			async login() {
+				console.log(`[LOGIN] 手机号登录请求: method=${this.currentMethod}`)
 				if (this.isLoggingIn) return;
 				if (!this.agreed) {
 					uni.showToast({ title: '请阅读并同意隐私政策和用户协议', icon: 'none' });
@@ -152,14 +184,15 @@
 				}
 				this.isLoggingIn = true;
 				try {
-					const res = await request<any>(new RequestOptions('/auth/login', 'POST', {
+					const res = await request<LoginResponse>(new RequestOptions('/auth/login', 'POST', {
 						phone: this.phone,
 						code: this.code
 					}));
 					
 					this.isLoggingIn = false;
 					
-					// Store user in state
+					console.log(`[LOGIN] 手机号登录成功: user_id=${res.user.id}`)
+					
 					activitiesState.user = {
 						id: res.user.id,
 						phone: res.user.phone,
@@ -177,12 +210,12 @@
 					});
 				} catch (e) {
 					this.isLoggingIn = false;
-					// Error handled by request util
+					console.error('[LOGIN] 手机号登录失败', e)
 				}
 			},
 			// #ifdef MP-WEIXIN
 			async onGetPhoneNumber(e) {
-				console.log('getPhoneNumber', e);
+				console.log('[LOGIN] 微信获取手机号回调', e)
 				if (!this.agreed) {
 					uni.showToast({ title: '请阅读并同意隐私政策和用户协议', icon: 'none' });
 					return;
@@ -190,12 +223,13 @@
 				if (e.detail.errMsg === "getPhoneNumber:ok") {
 					this.isLoggingIn = true;
 					try {
-						const res = await request<any>(new RequestOptions('/auth/login/wechat', 'POST', {
+						const res = await request<LoginResponse>(new RequestOptions('/auth/login/wechat', 'POST', {
 							code: e.detail.code
 						}));
 						this.isLoggingIn = false;
 						
-						// Store user in state
+						console.log(`[LOGIN] 微信登录成功: user_id=${res.user.id}`)
+						
 						activitiesState.user = {
 							id: res.user.id,
 							phone: res.user.phone,
@@ -211,59 +245,117 @@
 						uni.navigateBack();
 					} catch (err) {
 						this.isLoggingIn = false;
+						console.error('[LOGIN] 微信登录失败', err)
 						uni.showToast({ title: '登录失败', icon: 'none' });
 					}
 				} else {
+					console.warn('[LOGIN] 微信获取手机号失败', e.detail.errMsg)
 					uni.showToast({ title: '获取手机号失败', icon: 'none' });
 				}
 			},
 			// #endif
 			loginWithApple() {
 				// #ifdef APP-IOS
+				console.log('[LOGIN] Apple 登录请求')
 				if (this.isLoggingIn) return;
 				if (!this.agreed) {
 					uni.showToast({ title: '请阅读并同意隐私政策和用户协议', icon: 'none' });
 					return;
 				}
 				this.isLoggingIn = true;
+				
 				uni.login({
 					provider: 'apple',
 					success: (loginRes) => {
-						// 登录成功
+						console.log('[LOGIN] Apple uni.login 成功', loginRes)
+						
 						uni.getUserInfo({
 							provider: 'apple',
-							success: (userInfoRes) => {
-								console.log('Apple login success', userInfoRes);
-								this.isLoggingIn = false;
-								uni.switchTab({ url: '/pages/activities/activities' });
+							success: async (userInfoRes) => {
+								console.log('[LOGIN] Apple 获取用户信息成功', userInfoRes)
+								
+								const appleInfo = userInfoRes.userInfo as any
+								const identityToken = appleInfo?.identityToken || loginRes.authResult?.identity_token
+								const userIdentifier = appleInfo?.openUserId || loginRes.authResult?.user_identifier
+								const email = appleInfo?.email
+								const fullName = appleInfo?.fullName ? `${appleInfo.fullName.familyName || ''}${appleInfo.fullName.givenName || ''}` : null
+								
+								console.log(`[LOGIN] Apple Token 长度: ${identityToken ? identityToken.length : 0}`)
+								
+								if (!identityToken) {
+									console.error('[LOGIN] Apple 登录失败: 缺少 identity_token')
+									this.isLoggingIn = false;
+									uni.showToast({ title: 'Apple 登录失败', icon: 'none' });
+									return;
+								}
+								
+								try {
+									const res = await request<LoginResponse>(new RequestOptions('/auth/login/apple', 'POST', {
+										identity_token: identityToken,
+										user_identifier: userIdentifier,
+										email: email,
+										full_name: fullName
+									}));
+									
+									this.isLoggingIn = false;
+									
+									console.log(`[LOGIN] Apple 登录成功: user_id=${res.user.id}`)
+									
+									activitiesState.user = {
+										id: res.user.id,
+										phone: res.user.phone,
+										username: res.user.username,
+										avatar_url: res.user.avatar_url,
+										bio: res.user.bio,
+										is_certified: res.user.is_certified,
+										token: res.token
+									} as User;
+									
+									saveToStorage();
+									
+									uni.switchTab({ url: '/pages/activities/activities' });
+								} catch (err) {
+									this.isLoggingIn = false;
+									console.error('[LOGIN] Apple 登录 API 调用失败', err)
+									uni.showToast({ title: 'Apple 登录失败', icon: 'none' });
+								}
 							},
 							fail: (err) => {
 								this.isLoggingIn = false;
+								console.error('[LOGIN] Apple 获取用户信息失败', err)
 								uni.showToast({ title: '获取用户信息失败', icon: 'none' });
 							}
 						});
 					},
 					fail: (err) => {
 						this.isLoggingIn = false;
-						uni.showToast({ title: 'Apple 登录失败', icon: 'none' });
-						console.error(err);
+						console.error('[LOGIN] Apple uni.login 失败', err)
+						
+						if (err.errMsg && err.errMsg.indexOf('cancel') !== -1) {
+							console.log('[LOGIN] 用户取消 Apple 登录')
+						} else {
+							uni.showToast({ title: 'Apple 登录失败', icon: 'none' });
+						}
 					}
 				});
 				// #endif
 			},
 			openPrivacy() {
+				console.log('[LOGIN] 打开隐私政策')
 				const url = config.PRIVACY_POLICY_URL;
 				if (url != null) {
 					this.openUrl(url as string);
 				}
 			},
 			openTerms() {
+				console.log('[LOGIN] 打开用户协议')
 				const url = config.USER_AGREEMENT_URL;
 				if (url != null) {
 					this.openUrl(url as string);
 				}
 			},
 			openUrl(url: string) {
+				console.log(`[LOGIN] 打开 URL: ${url}`)
 				// #ifdef APP-PLUS
 				plus.runtime.openURL(url);
 				// #endif
