@@ -133,12 +133,16 @@ def get_activity(id):
     - 若请求方是该活动组织者，则返回报名手机号明文；
     - 否则返回脱敏手机号（mask_registrations=True）。
     - 联系方式仅对已报名用户和组织者可见。
+    - 每次查看活动详情，浏览量 +1。
 
     判断方式：
     - 若请求携带 Authorization，则尝试解析 JWT；
     - JWT 解析失败或未携带，则视为非组织者。
     """
     activity = Activity.query.get_or_404(id)
+    
+    activity.views_count += 1
+    db.session.commit()
     
     auth_header = request.headers.get('Authorization')
     is_organizer = False
@@ -267,8 +271,11 @@ def get_my_ticket(id):
     返回：
     - registration: 报名信息
     - ticket_code: Base64 编码的签到码（格式 CHECKIN:<activity_id>:<registration_id>:<timestamp>）
+    - qr_code_image: Base64 编码的二维码图片（PNG格式）
     - activity: 活动信息（包含主办方联系方式）
     """
+    from ..services.qrcode_service import generate_checkin_qrcode
+    
     user = request.user
     activity = Activity.query.get_or_404(id)
     
@@ -277,15 +284,15 @@ def get_my_ticket(id):
     if not registration:
         return jsonify({'error': '您尚未报名此活动'}), 404
 
-    import base64
     import time
+    timestamp = int(time.time())
     
-    code_content = f"CHECKIN:{id}:{registration.id}:{int(time.time())}"
-    b64_code = base64.b64encode(code_content.encode('utf-8')).decode('utf-8')
+    b64_code, qr_base64 = generate_checkin_qrcode(id, registration.id, timestamp)
     
     return jsonify({
         'registration': registration.to_dict(),
         'ticket_code': b64_code,
+        'qr_code_image': qr_base64,
         'activity': activity.to_dict(show_contact=True, is_organizer=False)
     })
 

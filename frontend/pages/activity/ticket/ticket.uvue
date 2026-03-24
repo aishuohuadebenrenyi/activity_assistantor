@@ -1,6 +1,9 @@
 <template>
   <view class="container">
-    <view v-if="activity != null" class="ticket-content">
+    <view v-if="isLoading" class="loading">
+      <text class="loading-text">加载中...</text>
+    </view>
+    <view v-else-if="activity != null" class="ticket-content">
       <view class="status-bar">
           <text class="status-text">已报名</text>
           <text class="status-icon">✅</text>
@@ -92,6 +95,9 @@
             <text class="btn-text">扫码签到</text>
         </button>
         <!-- #endif -->
+        <button v-if="!checkedIn" class="action-btn danger-btn" @click="confirmCancel">
+            <text class="btn-text danger-text">取消报名</text>
+        </button>
         <button class="action-btn secondary-btn" @click="goHome">
             <text class="btn-text secondary-text">返回列表</text>
         </button>
@@ -105,13 +111,16 @@
 </template>
 
 <script lang="uts">
-import { activitiesState, Activity } from '@/store/index.uts'
+import { activitiesState, Activity, cancelRegistration, mapBackendToFrontend } from '@/store/index.uts'
 import { request, RequestOptions } from '@/utils/request.uts'
+import { config } from '@/utils/config.uts'
+import { ActivityResponse, TicketResponse } from '@/utils/api_types.uts'
 
-type TicketResponse = {
-    registration: any
-    ticket_code: string
-    activity: any
+type TicketRegistration = {
+  id: number
+  name: string
+  phone: string
+  checked_in: boolean
 }
 
 type LocationInfo = {
@@ -127,18 +136,18 @@ export default {
       activity: null as Activity | null,
       ticketCode: '',
       qrCodeUrl: '',
-      locationInfo: null as LocationInfo | null
+      locationInfo: null as LocationInfo | null,
+      isLoading: true,
+      checkedIn: false
     }
   },
   onLoad(options) {
     const idStr = options['id']
     if (idStr != null) {
       const id = parseInt(idStr as string)
-      const found = activitiesState.activities.find((a: Activity): boolean => a.id == id)
-      if (found != null) {
-        this.activity = found
-        this.fetchTicket(id)
-      }
+      this.loadActivityAndTicket(id)
+    } else {
+      this.isLoading = false
     }
   },
   computed: {
@@ -149,13 +158,41 @@ export default {
     }
   },
   methods: {
+    async loadActivityAndTicket(id: number) {
+      const found = activitiesState.activities.find((a: Activity): boolean => a.id == id)
+      if (found != null) {
+        this.activity = found
+        this.fetchTicket(id)
+        this.isLoading = false
+        return
+      }
+      
+      try {
+        const res = await request<ActivityResponse>(
+          new RequestOptions(`/activities/${id}`, 'GET')
+        )
+        
+        this.activity = mapBackendToFrontend(res)
+        this.fetchTicket(id)
+      } catch (e) {
+        console.error('Load activity failed', e)
+        uni.showToast({ title: '加载失败', icon: 'none' })
+      } finally {
+        this.isLoading = false
+      }
+    },
     async fetchTicket(id: number) {
         try {
             const res = await request<TicketResponse>(
                 new RequestOptions(`/activities/${id}/my-ticket`, 'GET')
             )
             this.ticketCode = res.ticket_code
-            this.qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(this.ticketCode)}`
+            this.checkedIn = res.registration?.checked_in ?? false
+            if (res.qr_code_image && res.qr_code_image.length > 0) {
+                this.qrCodeUrl = res.qr_code_image
+            } else {
+                this.qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(this.ticketCode)}`
+            }
         } catch (e) {
             console.error('Fetch ticket failed', e)
             uni.showToast({ title: '获取电子票失败', icon: 'none' })
@@ -219,7 +256,7 @@ export default {
             url: 'https://apis.map.qq.com/ws/geocoder/v1/',
             data: {
                 address: this.activity!.location,
-                key: 'YOUR_TENCENT_MAP_KEY'
+                key: config.TENCENT_MAP_KEY
             },
             success: (res) => {
                 uni.hideLoading()
@@ -306,6 +343,46 @@ export default {
         // #ifndef MP-WEIXIN
         uni.navigateBack();
         // #endif
+    },
+    confirmCancel() {
+        uni.showModal({
+            title: '确认取消报名',
+            content: '确定要取消报名吗？取消后需要重新报名。',
+            confirmText: '确认取消',
+            confirmColor: '#FF3B30',
+            cancelText: '再想想',
+            success: async (res) => {
+                if (res.confirm) {
+                    await this.doCancel()
+                }
+            }
+        })
+    },
+    async doCancel() {
+        if (this.activity == null) return
+        
+        uni.showLoading({ title: '取消中...' })
+        try {
+            const success = await cancelRegistration(this.activity!.id)
+            uni.hideLoading()
+            if (success) {
+                uni.showToast({ title: '取消报名成功', icon: 'success' })
+                setTimeout(() => {
+                    // #ifdef MP-WEIXIN
+                    uni.switchTab({
+                        url: '/pages/user/my-activities/my-activities'
+                    })
+                    // #endif
+                    // #ifndef MP-WEIXIN
+                    uni.navigateBack()
+                    // #endif
+                }, 1500)
+            }
+        } catch (e: any) {
+            uni.hideLoading()
+            const errorMsg = e?.message || '取消报名失败'
+            uni.showToast({ title: errorMsg, icon: 'none' })
+        }
     }
   }
 }
@@ -534,6 +611,11 @@ export default {
     border: 1px solid #E5E5EA;
 }
 
+.danger-btn {
+    background-color: #fff;
+    border: 1px solid #FF3B30;
+}
+
 .btn-icon {
     font-size: 18px;
     color: #fff;
@@ -548,6 +630,10 @@ export default {
 
 .secondary-text {
     color: #000;
+}
+
+.danger-text {
+    color: #FF3B30;
 }
 
 .loading {

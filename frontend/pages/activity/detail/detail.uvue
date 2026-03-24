@@ -2,7 +2,12 @@
 <template>
 	<view class="container">
 		<scroll-view class="scroll-content" scroll-y="true">
-			<view v-if="!isActivityValid" class="invalid-state card">
+			<view v-if="isLoading" class="loading-state card">
+				<view class="card-content loading-content">
+					<text class="loading-text">加载中...</text>
+				</view>
+			</view>
+			<view v-else-if="!isActivityValid" class="invalid-state card">
 				<view class="card-content invalid-content">
 					<text class="invalid-title">活动不存在或已删除</text>
 					<text class="invalid-desc">请返回首页查看其他活动</text>
@@ -187,14 +192,17 @@
 </template>
 
 <script>
-	import { activitiesState, updateActivity, Activity, deleteActivity } from '@/store/index.uts'
+	import { activitiesState, updateActivity, Activity, deleteActivity, mapBackendToFrontend } from '@/store/index.uts'
 	import { logEvent } from '@/utils/analytics.uts'
 	import { request, RequestOptions } from '@/utils/request.uts'
+	import { ActivityResponse } from '@/utils/api_types.uts'
 
 	export default {
 		data() {
 			return {
 				activityId: 0,
+				isLoading: true,
+				localActivity: null as Activity | null,
 				showDetail: false,
 				isEditing: false,
 				form: {
@@ -212,7 +220,7 @@
 			if (id != null) {
 				this.activityId = parseInt(id as string);
 			}
-			this.initForm();
+			this.loadActivity();
 			logEvent('page_view', { page: 'activity_detail', id: this.activityId });
 		},
 		// #ifdef MP-WEIXIN
@@ -225,12 +233,16 @@
 		// #endif
 		computed: {
 			activity(): Activity {
+				if (this.localActivity != null) {
+					return this.localActivity;
+				}
 				const found = activitiesState.activities.find((a: Activity): boolean => a.id === this.activityId);
 				if (found != null) {
 					return found;
 				}
 				return {
 					id: 0,
+					organizer_id: 0,
 					name: '',
 					type: '',
 					date: '',
@@ -269,6 +281,28 @@
 			}
 		},
 		methods: {
+			async loadActivity() {
+				const found = activitiesState.activities.find((a: Activity): boolean => a.id === this.activityId);
+				if (found != null) {
+					this.localActivity = found;
+					this.initForm();
+					this.isLoading = false;
+					return;
+				}
+				
+				try {
+					const res = await request<ActivityResponse>(
+						new RequestOptions(`/activities/${this.activityId}`, 'GET')
+					);
+					
+					this.localActivity = mapBackendToFrontend(res);
+					this.initForm();
+				} catch (e) {
+					console.error('Load activity failed', e);
+				} finally {
+					this.isLoading = false;
+				}
+			},
 			initForm() {
 				if (this.activity) {
 					this.form = {
@@ -391,6 +425,20 @@
 					return;
 				}
 
+				if (!user.phone) {
+					uni.showModal({
+						title: '需要绑定手机号',
+						content: '报名活动需要绑定手机号，是否立即绑定？',
+						confirmText: '去绑定',
+						success: (res) => {
+							if (res.confirm) {
+								uni.navigateTo({ url: '/pages/auth/login?bindPhone=1' });
+							}
+						}
+					});
+					return;
+				}
+
 				uni.showModal({
 					title: '确认报名',
 					content: `确定报名参加《${this.activity.name}》吗？`,
@@ -478,6 +526,20 @@
 </script>
 
 <style scoped>
+	.loading-state {
+		margin-bottom: 16px;
+	}
+	
+	.loading-content {
+		align-items: center;
+		padding: 40px 16px;
+	}
+	
+	.loading-text {
+		font-size: 16px;
+		color: #8E8E93;
+	}
+	
 	.report-section {
 		align-items: center;
 		padding: 20px 0;

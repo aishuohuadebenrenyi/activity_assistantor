@@ -1,0 +1,263 @@
+<template>
+  <view class="container">
+    <scroll-view class="scroll-content" scroll-y="true">
+      <view v-if="activities.length === 0" class="empty-state">
+        <text class="empty-icon">📋</text>
+        <text class="empty-title">暂无创建的活动</text>
+        <text class="empty-desc">点击首页"创建"按钮发布您的第一个活动</text>
+        <button class="create-btn" @click="goToCreate">
+          <text class="create-btn-text">立即创建</text>
+        </button>
+      </view>
+      
+      <view v-else class="activity-list">
+        <view 
+          v-for="activity in activities" 
+          :key="activity.id" 
+          class="activity-card"
+          @click="goToDetail(activity.id)"
+          hover-class="hover-opacity"
+        >
+          <view class="activity-header">
+            <text class="activity-name">{{ activity.name }}</text>
+            <view :class="['status-badge', getStatusClass(activity.status)]">
+              <text class="status-text">{{ getStatusText(activity.status) }}</text>
+            </view>
+          </view>
+          
+          <view class="activity-info">
+            <view class="info-row">
+              <text class="info-icon">📅</text>
+              <text class="info-text">{{ activity.date }} {{ activity.time }}</text>
+            </view>
+            <view class="info-row">
+              <text class="info-icon">📍</text>
+              <text class="info-text">{{ activity.location || '地点待定' }}</text>
+            </view>
+          </view>
+          
+          <view class="activity-stats">
+            <view class="stat-item">
+              <text class="stat-value">{{ activity.participants }}</text>
+              <text class="stat-label">报名</text>
+            </view>
+            <view class="stat-item">
+              <text class="stat-value">{{ activity.checkins }}</text>
+              <text class="stat-label">签到</text>
+            </view>
+            <view class="stat-item">
+              <text class="stat-value">{{ activity.views }}</text>
+              <text class="stat-label">浏览</text>
+            </view>
+          </view>
+        </view>
+      </view>
+    </scroll-view>
+  </view>
+</template>
+
+<script lang="uts">
+import { activitiesState, Activity, fetchActivities } from '@/store/index.uts'
+
+export default {
+  data() {
+    return {}
+  },
+  onShow() {
+    fetchActivities()
+  },
+  computed: {
+    activities(): Activity[] {
+      const user = activitiesState.user
+      if (user == null) return [] as Activity[]
+      return activitiesState.activities.filter((a: Activity): boolean => {
+        return a.organizer_id === user.id
+      })
+    }
+  },
+  methods: {
+    goToDetail(id: number) {
+      uni.navigateTo({
+        url: `/pages/activity/detail/detail?id=${id}`
+      })
+    },
+    goToCreate() {
+      uni.switchTab({
+        url: '/pages/activity/create/create'
+      })
+    },
+    getStatusClass(status: string): string {
+      switch (status) {
+        case 'upcoming': return 'status-upcoming'
+        case 'ongoing': return 'status-ongoing'
+        case 'ended': return 'status-ended'
+        default: return 'status-upcoming'
+      }
+    },
+    getStatusText(status: string): string {
+      switch (status) {
+        case 'upcoming': return '即将开始'
+        case 'ongoing': return '进行中'
+        case 'ended': return '已结束'
+        default: return '未知'
+      }
+    }
+  }
+}
+</script>
+
+<style scoped>
+.container {
+  flex: 1;
+  background-color: #F2F2F7;
+}
+
+.scroll-content {
+  flex: 1;
+  padding: 16px;
+}
+
+.empty-state {
+  align-items: center;
+  padding: 60px 20px;
+}
+
+.empty-icon {
+  font-size: 64px;
+  margin-bottom: 16px;
+}
+
+.empty-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: #000000;
+  margin-bottom: 8px;
+}
+
+.empty-desc {
+  font-size: 14px;
+  color: #8E8E93;
+  margin-bottom: 24px;
+  text-align: center;
+}
+
+.create-btn {
+  background-color: #007AFF;
+  border-radius: 24px;
+  padding: 12px 32px;
+}
+
+.create-btn-text {
+  color: #FFFFFF;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.activity-list {
+  gap: 12px;
+}
+
+.activity-card {
+  background-color: #FFFFFF;
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.activity-header {
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.activity-name {
+  font-size: 17px;
+  font-weight: 600;
+  color: #000000;
+  flex: 1;
+  margin-right: 8px;
+}
+
+.status-badge {
+  padding: 4px 10px;
+  border-radius: 12px;
+}
+
+.status-upcoming {
+  background-color: rgba(0, 122, 255, 0.1);
+}
+
+.status-ongoing {
+  background-color: rgba(52, 199, 89, 0.1);
+}
+
+.status-ended {
+  background-color: rgba(142, 142, 147, 0.1);
+}
+
+.status-text {
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.status-upcoming .status-text {
+  color: #007AFF;
+}
+
+.status-ongoing .status-text {
+  color: #34C759;
+}
+
+.status-ended .status-text {
+  color: #8E8E93;
+}
+
+.activity-info {
+  margin-bottom: 12px;
+}
+
+.info-row {
+  flex-direction: row;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.info-icon {
+  font-size: 14px;
+  margin-right: 6px;
+}
+
+.info-text {
+  font-size: 14px;
+  color: #666666;
+}
+
+.activity-stats {
+  flex-direction: row;
+  border-top: 0.5px solid #E5E5EA;
+  padding-top: 12px;
+}
+
+.stat-item {
+  flex: 1;
+  align-items: center;
+}
+
+.stat-value {
+  font-size: 18px;
+  font-weight: 700;
+  color: #000000;
+}
+
+.stat-label {
+  font-size: 12px;
+  color: #8E8E93;
+  margin-top: 2px;
+}
+
+.hover-opacity {
+  opacity: 0.7;
+}
+</style>

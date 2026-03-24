@@ -92,6 +92,12 @@
         "navigationBarTitleText": "我的报名"
       }
     },
+    {
+      "path": "pages/user/created-activities/created-activities",
+      "style": {
+        "navigationBarTitleText": "我创建的活动"
+      }
+    },
     // #endif
     {
       "path": "pages/activity/ticket/ticket",

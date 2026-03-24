@@ -107,6 +107,46 @@ def register(activity_id):
     
     return jsonify(reg.to_dict()), 201
 
+@participant_bp.route('/<int:activity_id>/register', methods=['DELETE'])
+@auth_required
+def cancel_registration(activity_id):
+    """
+    取消报名（需要登录）。
+
+    业务规则：
+    - 通过当前用户的手机号匹配报名记录；
+    - 已签到的报名不可取消；
+    - 活动已开始后不可取消。
+
+    返回：
+    - 200: 取消成功；
+    - 400: 未报名、已签到或活动已开始；
+    - 404: 活动不存在。
+    """
+    from datetime import datetime
+    
+    user = request.user
+    activity = Activity.query.get_or_404(activity_id)
+    
+    if not user.phone:
+        return jsonify({'error': '用户未绑定手机号'}), 400
+    
+    registration = Registration.query.filter_by(activity_id=activity_id, phone=user.phone).first()
+    if not registration:
+        return jsonify({'error': '您尚未报名此活动'}), 400
+    
+    if activity.start_time and activity.start_time < datetime.utcnow():
+        return jsonify({'error': '活动已开始，无法取消报名'}), 400
+    
+    checkin = CheckinRecord.query.filter_by(registration_id=registration.id).first()
+    if checkin:
+        return jsonify({'error': '您已签到，无法取消报名'}), 400
+    
+    db.session.delete(registration)
+    db.session.commit()
+    
+    return jsonify({'message': '取消报名成功', 'activity_id': activity_id})
+
 @participant_bp.route('/<int:activity_id>/export', methods=['POST'])
 @auth_required
 @idempotent

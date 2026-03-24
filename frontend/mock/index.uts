@@ -25,12 +25,35 @@ export const handleMockRequest = async <T>(url: string, method: string, data: an
   // ========================================
   // 活动相关 API
   // ========================================
+  
+  // 特定路由优先匹配（放在通用路由之前）
+  if (url.match(/\/activities\/\d+\/my-ticket/) && method === 'GET') {
+    const activityIdMatch = url.match(/\/activities\/(\d+)\/my-ticket/);
+    const activityId = activityIdMatch ? parseInt(activityIdMatch[1]) : 1;
+    console.log(`[Mock] Get my-ticket for activity: ${activityId}`);
+    const activity = MOCK_ACTIVITIES.find(a => a.id === activityId);
+    
+    if (activity != null) {
+      const registration = activity.registrations?.[0];
+      return {
+        registration: {
+          id: registration?.id ?? 1,
+          activity_id: activityId,
+          name: registration?.name ?? '测试用户',
+          phone: registration?.phone ?? '138****0000',
+          checked_in: registration?.checked_in ?? false
+        },
+        ticket_code: `CHECKIN:${activityId}:${registration?.id ?? 1}:MOCK_TOKEN`,
+        qr_code_image: null,
+        activity: activity
+      } as T;
+    }
+    throw new Error(`Activity not found: ${activityId}`);
+  }
+  
   if (url === '/activities' && method === 'GET') {
-    // 支持分页参数
-    const pageMatch = url.match(/page=(\d+)/);
-    const pageSizeMatch = url.match(/page_size=(\d+)/);
-    const page = pageMatch ? parseInt(pageMatch[1]) : 1;
-    const pageSize = pageSizeMatch ? parseInt(pageSizeMatch[1]) : 20;
+    const page = 1;
+    const pageSize = 20;
     
     return {
       activities: MOCK_ACTIVITIES,
@@ -51,10 +74,19 @@ export const handleMockRequest = async <T>(url: string, method: string, data: an
     } as T;
   }
   
+  // 通用活动详情路由（放在特定路由之后）
   if (url.startsWith('/activities/') && method === 'GET') {
-    const id = parseInt(url.split('/').pop() ?? '0');
+    const parts = url.split('/');
+    const idStr = parts[parts.length - 1];
+    const id = parseInt(idStr);
+    console.log(`[Mock] Get activity by id: ${idStr} -> ${id}`);
     const activity = MOCK_ACTIVITIES.find(a => a.id === id);
-    if (activity != null) return activity as T;
+    if (activity != null) {
+      console.log(`[Mock] Found activity: ${activity.name}`);
+      return activity as T;
+    }
+    console.log(`[Mock] Activity not found for id: ${id}`);
+    throw new Error(`Activity not found: ${id}`);
   }
   
   if (url === '/activities' && method === 'POST') {
@@ -113,6 +145,78 @@ export const handleMockRequest = async <T>(url: string, method: string, data: an
         checkin_records: [],
         message: 'Updated successfully' 
     } as T;
+  }
+  
+  // ========================================
+  // 报名相关 API
+  // ========================================
+  if (url.match(/\/activities\/\d+\/register/) && method === 'POST') {
+    const activityIdMatch = url.match(/\/activities\/(\d+)\/register/);
+    const activityId = activityIdMatch ? parseInt(activityIdMatch[1]) : 1;
+    const payload = data != null ? data as UTSJSONObject : {} as UTSJSONObject;
+    
+    const newRegistration = {
+      id: Date.now(),
+      activity_id: activityId,
+      name: payload['name'] as string ?? '微信用户',
+      phone: payload['phone'] as string ?? '138****0000',
+      created_at: new Date().toISOString(),
+      checked_in: false
+    };
+    
+    const activity = MOCK_ACTIVITIES.find(a => a.id === activityId);
+    if (activity != null) {
+      activity.registrations.push(newRegistration);
+    }
+    
+    return { 
+      message: 'Registration successful',
+      registration: newRegistration
+    } as T;
+  }
+  
+  if (url.match(/\/activities\/\d+\/register/) && method === 'DELETE') {
+    return { message: 'Registration cancelled' } as T;
+  }
+  
+  if (url === '/user/registrations' && method === 'GET') {
+    const registrations = MOCK_ACTIVITIES.map(activity => {
+      const reg = activity.registrations[0];
+      if (reg == null) return null;
+      return {
+        registration: reg,
+        activity: activity,
+        checked_in: reg.checked_in,
+        checkin_time: null
+      };
+    }).filter(r => r != null);
+    
+    return { 
+      registrations: registrations,
+      total: registrations.length
+    } as T;
+  }
+  
+  if (url.match(/\/activities\/\d+\/ticket/) && method === 'GET') {
+    const activityIdMatch = url.match(/\/activities\/(\d+)\/ticket/);
+    const activityId = activityIdMatch ? parseInt(activityIdMatch[1]) : 1;
+    const activity = MOCK_ACTIVITIES.find(a => a.id === activityId);
+    
+    if (activity != null) {
+      return {
+        id: 1,
+        activity_id: activityId,
+        activity_name: activity.name,
+        activity_date: activity.start_time,
+        activity_location: activity.location,
+        user_name: '测试用户',
+        user_phone: '138****0000',
+        ticket_code: `CHECKIN:${activityId}:1:MOCK_TOKEN`,
+        qr_code_image: null,
+        status: 'valid'
+      } as T;
+    }
+    return { message: 'Ticket not found' } as T;
   }
   
   // ========================================

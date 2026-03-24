@@ -97,7 +97,7 @@
 </template>
 
 <script>
-	import { addActivity, Activity } from '@/store/index.uts'
+	import { addActivity, Activity, activitiesState } from '@/store/index.uts'
 	import { logEvent } from '@/utils/analytics.uts'
 
 	export default {
@@ -172,6 +172,7 @@
 
 				const newActivity = {
 					id: Date.now(),
+					organizer_id: activitiesState.user?.id ?? 0,
 					name: this.form.name,
 					date: this.form.date,
 					time: this.form.time,

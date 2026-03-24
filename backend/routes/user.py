@@ -198,3 +198,43 @@ def get_user_reports():
         'reports': [r.to_dict() for r in reports],
         'total': len(reports)
     })
+
+@user_bp.route('/registrations', methods=['GET'])
+@auth_required
+def get_user_registrations():
+    """
+    获取当前用户报名的活动列表。
+
+    业务规则：
+    - 通过用户手机号匹配报名记录；
+    - 返回活动详情与报名状态。
+
+    返回：
+    - 200: 报名活动列表
+    """
+    user = request.user
+    
+    if not user.phone:
+        return jsonify({
+            'registrations': [],
+            'total': 0
+        })
+    
+    registrations = Registration.query.filter_by(phone=user.phone).order_by(Registration.created_at.desc()).all()
+    
+    result = []
+    for reg in registrations:
+        activity = Activity.query.get(reg.activity_id)
+        if activity:
+            checkin_record = CheckinRecord.query.filter_by(registration_id=reg.id).first()
+            result.append({
+                'registration': reg.to_dict(),
+                'activity': activity.to_dict(include_registrations=False, show_contact=True, is_organizer=False),
+                'checked_in': checkin_record is not None,
+                'checkin_time': checkin_record.checkin_time.isoformat() if checkin_record else None
+            })
+    
+    return jsonify({
+        'registrations': result,
+        'total': len(result)
+    })

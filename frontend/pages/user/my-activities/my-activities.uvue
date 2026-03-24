@@ -11,84 +11,127 @@
         </view>
     </view>
     <!-- #endif -->
-    <view class="activity-list">
-      <view v-for="activity in activities" :key="activity.id" class="activity-item" @click="goToTicket(activity.id)">
-        <text class="activity-title">{{ activity.name }}</text>
+    
+    <view v-if="isLoading" class="loading-state">
+      <text class="loading-text">加载中...</text>
+    </view>
+    
+    <view v-else-if="registrations.length === 0" class="empty-state">
+      <text class="empty-icon">📋</text>
+      <text class="empty-title">暂无报名的活动</text>
+      <text class="empty-desc">扫码或点击分享链接报名参加活动</text>
+      <!-- #ifdef MP-WEIXIN -->
+      <button class="scan-btn" @click="scanCode">
+          <text class="scan-btn-text">扫码加入</text>
+      </button>
+      <!-- #endif -->
+    </view>
+    
+    <view v-else class="activity-list">
+      <view 
+        v-for="item in registrations" 
+        :key="item.registration.id" 
+        class="activity-item" 
+        @click="goToTicket(item.activity.id)"
+        hover-class="hover-opacity"
+      >
+        <view class="activity-header">
+          <text class="activity-title">{{ item.activity.name }}</text>
+          <view :class="['status-badge', item.checked_in ? 'status-checked' : 'status-registered']">
+            <text class="status-text">{{ item.checked_in ? '已签到' : '已报名' }}</text>
+          </view>
+        </view>
         <view class="activity-info">
-          <text class="info-text">时间: {{ activity.date }} {{ activity.time }}</text>
-          <text class="info-text">地点: {{ activity.location }}</text>
+          <view class="info-row">
+            <text class="info-icon">📅</text>
+            <text class="info-text">{{ formatDate(item.activity.start_time) }} {{ formatTime(item.activity.start_time) }}</text>
+          </view>
+          <view class="info-row">
+            <text class="info-icon">📍</text>
+            <text class="info-text">{{ item.activity.location || '地点待定' }}</text>
+          </view>
         </view>
         <view class="ticket-badge">
             <text class="ticket-text">电子票</text>
         </view>
-      </view>
-      <view v-if="activities.length === 0" class="empty-state">
-        <text class="empty-text">暂无报名的活动</text>
-        <!-- #ifdef MP-WEIXIN -->
-        <button class="scan-btn" @click="scanCode">
-            <text class="scan-btn-text">扫码加入</text>
-        </button>
-        <!-- #endif -->
       </view>
     </view>
   </view>
 </template>
 
 <script lang="uts">
-import { activitiesState, Activity, fetchActivities } from '@/store/index.uts'
+import { fetchUserRegistrations, UserRegistration } from '@/store/index.uts'
 
 export default {
-  onShow() {
-    fetchActivities();
-  },
-  computed: {
-    activities(): Activity[] {
-      // Mock filter: show all for demo
-      return activitiesState.activities
+  data() {
+    return {
+      registrations: [] as UserRegistration[],
+      isLoading: false
     }
   },
+  onShow() {
+    this.loadRegistrations()
+  },
   methods: {
+    async loadRegistrations() {
+      this.isLoading = true
+      try {
+        this.registrations = await fetchUserRegistrations()
+      } catch (e) {
+        console.error('Load registrations failed', e)
+        uni.showToast({ title: '加载失败', icon: 'none' })
+      } finally {
+        this.isLoading = false
+      }
+    },
     goToTicket(id: number) {
       uni.navigateTo({
         url: `/pages/activity/ticket/ticket?id=${id}`
       })
     },
+    goToActivity(id: number) {
+      uni.navigateTo({
+        url: `/pages/activity/detail/detail?id=${id}`
+      })
+    },
+    formatDate(isoString: string): string {
+      const date = new Date(isoString)
+      return `${date.getMonth() + 1}月${date.getDate()}日`
+    },
+    formatTime(isoString: string): string {
+      const date = new Date(isoString)
+      return `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`
+    },
     // #ifdef MP-WEIXIN
     scanCode() {
         uni.scanCode({
             success: (res) => {
-                // Parse the result
-                // Expected format: https://domain.com/join?id=123 or just id=123
-                // For now, let's assume the result contains the activity ID
-                const content = res.result;
-                // Simple parsing logic for demo
-                // Check if it's a URL with id param
-                let activityId = "";
+                const content = res.result
+                let activityId = ""
                 if (content.includes("id=")) {
-                    const parts = content.split("id=");
+                    const parts = content.split("id=")
                     if (parts.length > 1) {
-                        activityId = parts[1].split("&")[0];
+                        activityId = parts[1].split("&")[0]
                     }
                 } else {
-                    // Assume the content is the ID itself
-                    activityId = content;
+                    activityId = content
                 }
                 
                 if (activityId !== "") {
                     uni.navigateTo({
                         url: `/pages/activity/detail/detail?id=${activityId}`
-                    });
+                    })
                 } else {
                     uni.showToast({
                         title: '无效的二维码',
                         icon: 'none'
-                    });
+                    })
                 }
             },
             fail: (err) => {
-                console.log('Scan failed: ', err);
+                console.log('Scan failed: ', err)
             }
-        });
+        })
     }
     // #endif
   }
@@ -101,6 +144,41 @@ export default {
   background-color: #F2F2F7;
   min-height: 100vh;
 }
+
+.loading-state {
+  padding: 60px 20px;
+  align-items: center;
+}
+
+.loading-text {
+  font-size: 16px;
+  color: #8E8E93;
+}
+
+.empty-state {
+  padding: 60px 20px;
+  align-items: center;
+}
+
+.empty-icon {
+  font-size: 64px;
+  margin-bottom: 16px;
+}
+
+.empty-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: #000000;
+  margin-bottom: 8px;
+}
+
+.empty-desc {
+  font-size: 14px;
+  color: #8E8E93;
+  margin-bottom: 24px;
+  text-align: center;
+}
+
 /* #ifdef MP-WEIXIN */
 .scan-banner {
     background-color: #FFFFFF;
@@ -140,14 +218,41 @@ export default {
     margin-top: 16px;
     background-color: #007AFF;
     border-radius: 20px;
-    padding: 8px 24px;
+    padding: 12px 32px;
     justify-content: center;
     align-items: center;
 }
 .scan-btn-text {
     color: #FFFFFF;
-    font-size: 14px;
+    font-size: 16px;
     font-weight: 600;
+}
+.debug-section {
+    margin-top: 32px;
+    padding-top: 24px;
+    border-top: 1px dashed #E5E5EA;
+    width: 100%;
+    align-items: center;
+}
+.debug-title {
+    font-size: 14px;
+    color: #8E8E93;
+    margin-bottom: 16px;
+}
+.debug-btns {
+    width: 100%;
+    gap: 12px;
+}
+.debug-btn {
+    background-color: #F2F2F7;
+    border-radius: 12px;
+    padding: 12px 16px;
+    width: 100%;
+}
+.debug-btn-text {
+    color: #007AFF;
+    font-size: 14px;
+    font-weight: 500;
 }
 /* #endif */
 
@@ -156,28 +261,77 @@ export default {
   flex-direction: column;
   gap: 12px;
 }
+
 .activity-item {
   background-color: #ffffff;
   padding: 16px;
-  border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
   position: relative;
 }
-.activity-title {
-  font-size: 18px;
-  font-weight: bold;
-  margin-bottom: 8px;
-  color: #333;
+
+.activity-header {
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  padding-right: 60px;
 }
+
+.activity-title {
+  font-size: 17px;
+  font-weight: 600;
+  color: #000000;
+  flex: 1;
+}
+
+.status-badge {
+  padding: 4px 10px;
+  border-radius: 12px;
+}
+
+.status-registered {
+  background-color: rgba(0, 122, 255, 0.1);
+}
+
+.status-checked {
+  background-color: rgba(52, 199, 89, 0.1);
+}
+
+.status-text {
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.status-registered .status-text {
+  color: #007AFF;
+}
+
+.status-checked .status-text {
+  color: #34C759;
+}
+
 .activity-info {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
 }
+
+.info-row {
+  flex-direction: row;
+  align-items: center;
+}
+
+.info-icon {
+  font-size: 14px;
+  margin-right: 6px;
+}
+
 .info-text {
   font-size: 14px;
-  color: #666;
+  color: #666666;
 }
+
 .ticket-badge {
     position: absolute;
     top: 16px;
@@ -186,18 +340,14 @@ export default {
     padding: 4px 8px;
     border-radius: 4px;
 }
+
 .ticket-text {
     color: #34C759;
     font-size: 12px;
     font-weight: 600;
 }
-.empty-state {
-  padding: 32px;
-  align-items: center;
-  justify-content: center;
-}
-.empty-text {
-  font-size: 16px;
-  color: #999;
+
+.hover-opacity {
+  opacity: 0.7;
 }
 </style>

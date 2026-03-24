@@ -102,6 +102,7 @@
 				}
 				return {
 					id: 0,
+					organizer_id: 0,
 					name: '',
 					type: '',
 					date: '',

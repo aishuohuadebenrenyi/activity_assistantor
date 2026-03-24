@@ -20,6 +20,7 @@ import { setNetworkStatus } from '@/utils/network_state.uts'
 import { config } from '@/utils/config.uts'
 import { MOCK_ACTIVITIES } from '@/mock/data.uts'
 import { Activity, CheckinRecord, Registration } from './types.uts'
+import { ActivityResponse, RegistrationResponse, CheckinRecordResponse } from '@/utils/api_types.uts'
 
 export { Activity, CheckinRecord, Registration } from './types.uts'
 
@@ -102,45 +103,10 @@ export const setOnlineStatus = (status: boolean) => {
 };
 
 
-// 后端 API 返回的数据结构 (Models)
-type RegistrationResponse = {
-  id: number;
-  activity_id: number;
-  name: string;
-  phone: string;
-  created_at: string;
-  checked_in: boolean;
-}
-
-type CheckinRecordResponse = {
-  id: number;
-  registration_id: number;
-  activity_id: number;
-  checkin_time: string;
-}
-
-type ActivityResponse = {
-  id: number;
-  organizer_id: number;
-  name: string;
-  type: string;
-  start_time: string;
-  location: string;
-  description: string;
-  capacity: number;
-  status: string;
-  views_count: number;
-  created_at: string;
-  host_phone: string | null;
-  host_wechat: string | null;
-  show_phone: boolean;
-  show_wechat: boolean;
-  registrations: RegistrationResponse[];
-  checkin_records: CheckinRecordResponse[];
-}
+// 后端 API 返回的数据结构已移至 utils/api_types.uts
 
 // 数据转换：后端 Model -> 前端 ViewModel
-function mapBackendToFrontend(data: ActivityResponse): Activity {
+export function mapBackendToFrontend(data: ActivityResponse): Activity {
   /**
    * 将后端 ActivityResponse 转换为前端 Activity 展示模型。
    *
@@ -188,6 +154,7 @@ function mapBackendToFrontend(data: ActivityResponse): Activity {
 
   return {
     id: data.id,
+    organizer_id: data.organizer_id,
     name: data.name,
     type: data.type,
     date: dateStr,
@@ -484,6 +451,53 @@ export const reportContent = async (targetType: string, targetId: number, reason
     logEvent('content_reported', { type: targetType, id: targetId });
   } catch (e) {
     console.error("Report content failed", e);
+    throw e;
+  }
+};
+
+export type UserRegistration = {
+  registration: Registration;
+  activity: Activity;
+  checked_in: boolean;
+  checkin_time: string | null;
+}
+
+export const fetchUserRegistrations = async (): Promise<UserRegistration[]> => {
+  /**
+   * 获取当前用户报名的活动列表。
+   *
+   * 返回：
+   * - Promise<UserRegistration[]>: 报名活动列表
+   */
+  try {
+    type RegistrationsResponse = {
+      registrations: UserRegistration[];
+      total: number;
+    }
+    const res = await request<RegistrationsResponse>(new RequestOptions('/user/registrations', 'GET'));
+    return res.registrations;
+  } catch (e) {
+    console.error("Fetch user registrations failed", e);
+    return [] as UserRegistration[];
+  }
+};
+
+export const cancelRegistration = async (activityId: number): Promise<boolean> => {
+  /**
+   * 取消报名。
+   *
+   * 参数：
+   * - activityId: 活动 ID
+   *
+   * 返回：
+   * - Promise<boolean>: 是否取消成功
+   */
+  try {
+    await request(new RequestOptions(`/activities/${activityId}/register`, 'DELETE'));
+    logEvent('registration_cancelled', { activity_id: activityId });
+    return true;
+  } catch (e) {
+    console.error("Cancel registration failed", e);
     throw e;
   }
 };

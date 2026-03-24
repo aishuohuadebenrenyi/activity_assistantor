@@ -40,6 +40,7 @@ export interface Activity {
   checkins: number;
   views: number;
   status: string;
+  organizer_id: number;
   host_phone: string | null;
   host_wechat: string | null;
   show_phone: boolean;

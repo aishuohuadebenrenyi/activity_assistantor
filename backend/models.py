@@ -110,6 +110,31 @@ class Activity(db.Model):
     # 关系：活动的签到记录（级联删除）
     checkin_records = db.relationship('CheckinRecord', backref='activity', lazy='dynamic', cascade='all, delete-orphan')
 
+    def calculate_status(self):
+        """
+        根据当前时间动态计算活动状态。
+
+        状态规则：
+        - upcoming: 活动未开始（start_time > 当前时间）
+        - ongoing: 活动进行中（start_time <= 当前时间 < start_time + 24小时）
+        - ended: 活动已结束（当前时间 >= start_time + 24小时）
+
+        返回：
+        - str: 计算后的状态
+        """
+        from datetime import datetime, timedelta
+        
+        now = datetime.utcnow()
+        
+        if self.start_time > now:
+            return 'upcoming'
+        
+        end_time = self.start_time + timedelta(hours=24)
+        if now < end_time:
+            return 'ongoing'
+        
+        return 'ended'
+
     def to_dict(self, include_registrations=True, mask_registrations=True, show_contact=False, is_organizer=False):
         """
         将活动对象转换为可 JSON 序列化的字典。
@@ -123,6 +148,8 @@ class Activity(db.Model):
         返回：
         - dict: 活动字段快照
         """
+        calculated_status = self.calculate_status()
+        
         res = {
             'id': self.id,
             'organizer_id': self.user_id,
@@ -132,7 +159,7 @@ class Activity(db.Model):
             'location': self.location,
             'description': self.description,
             'capacity': self.capacity,
-            'status': self.status,
+            'status': calculated_status,
             'views_count': self.views_count,
             'created_at': self.created_at.isoformat(),
         }

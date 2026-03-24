@@ -52,6 +52,11 @@ export type Config = {
    */
   PRIVACY_POLICY_URL: string;
   USER_AGREEMENT_URL: string;
+  /**
+   * 腾讯地图 Key（用于地址解析和导航）。
+   * 申请地址：https://lbs.qq.com/
+   */
+  TENCENT_MAP_KEY: string;
 }
 
 export const config: Config = {
@@ -87,10 +92,18 @@ export const config: Config = {
   // 合规性配置（上架必须）
   // ========================================
   PRIVACY_POLICY_URL: "http://localhost:9000/legal/privacy",
-  USER_AGREEMENT_URL: "http://localhost:9000/legal/terms"
+  USER_AGREEMENT_URL: "http://localhost:9000/legal/terms",
   // 生产环境：取消注释并配置真实域名
   // PRIVACY_POLICY_URL: "https://yourdomain.com/legal/privacy",
   // USER_AGREEMENT_URL: "https://yourdomain.com/legal/terms"
+  
+  // ========================================
+  // 第三方服务配置
+  // ========================================
+  // 腾讯地图 Key（用于地址解析和导航）
+  // 申请地址：https://lbs.qq.com/console/myKey.html
+  // 注意：生产环境请配置真实的 Key
+  TENCENT_MAP_KEY: "YOUR_TENCENT_MAP_KEY"
 }
 
 // 兼容旧代码的快捷访问

@@ -6,11 +6,13 @@
 				<view class="auth-logo">
 					<text class="logo-icon">📅</text>
 				</view>
-				<text class="auth-title">Zentro</text>
+				<text class="auth-title">{{ bindPhoneMode ? '绑定手机号' : 'Zentro' }}</text>
+				<text v-if="bindPhoneMode" class="auth-subtitle">绑定手机号后即可报名活动</text>
 			</view>
 
 			<view class="auth-form">
-				<view class="auth-methods">
+				<!-- #ifndef MP-WEIXIN -->
+				<view v-if="!bindPhoneMode" class="auth-methods">
 					<view 
 						:class="['auth-method-btn', currentMethod === 'wechat' ? 'active' : '']"
 						@click="currentMethod = 'wechat'"
@@ -26,7 +28,9 @@
 						<text :class="['method-text', currentMethod === 'phone' ? 'active-text' : '']">手机号登录</text>
 					</view>
 				</view>
+				<!-- #endif -->
 
+				<!-- #ifndef MP-WEIXIN -->
 				<view v-if="currentMethod === 'phone'" class="phone-form">
 					<input class="input" type="tel" v-model="phone" placeholder="请输入手机号" maxlength="11" />
 					<view class="code-group">
@@ -39,15 +43,17 @@
 						<text class="submit-text">{{ isLoggingIn ? '登录中...' : '登录' }}</text>
 					</button>
 				</view>
+				<!-- #endif -->
 
-				<view v-else class="wechat-form">
-					<text class="wechat-desc">点击下方按钮唤起微信完成登录</text>
+				<view v-if="currentMethod === 'wechat'" class="wechat-form">
 					<!-- #ifdef MP-WEIXIN -->
+					<text class="wechat-desc">点击下方按钮授权手机号完成登录</text>
 					<button class="submit-btn wechat-btn" :disabled="isLoggingIn" open-type="getPhoneNumber" @getphonenumber="onGetPhoneNumber" hover-class="hover-opacity">
 						<text class="submit-text">{{ isLoggingIn ? '登录中...' : '微信一键登录' }}</text>
 					</button>
 					<!-- #endif -->
 					<!-- #ifndef MP-WEIXIN -->
+					<text class="wechat-desc">点击下方按钮唤起微信完成登录</text>
 					<button class="submit-btn wechat-btn" :disabled="isLoggingIn" @click="login" hover-class="hover-opacity">
 						<text class="submit-text">{{ isLoggingIn ? '登录中...' : '微信一键登录' }}</text>
 					</button>
@@ -84,26 +90,13 @@
 	import { request, RequestOptions } from '@/utils/request.uts'
 	import { activitiesState, User, saveToStorage } from '@/store/index.uts'
 	import { config } from '@/utils/config.uts'
+	import { LoginResponse } from '@/utils/api_types.uts'
 
 	type AppleLoginResult = {
 		identity_token: string | null
 		user_identifier: string | null
 		email: string | null
 		full_name: string | null
-	}
-
-	type LoginUser = {
-		id: number
-		phone: string | null
-		username: string | null
-		avatar_url: string | null
-		bio: string | null
-		is_certified: boolean
-	}
-
-	type LoginResponse = {
-		token: string
-		user: LoginUser
 	}
 
 	export default {
@@ -117,15 +110,22 @@
 				isLoggingIn: false,
 				topInset: 36,
 				countdownTimer: null as any,
-				agreed: false
+				agreed: false,
+				bindPhoneMode: false
 			}
 		},
-		onLoad() {
+		onLoad(options) {
 			console.log('[LOGIN] 页面加载')
 			const systemInfo = uni.getSystemInfoSync();
 			const safeTop = systemInfo.safeAreaInsets ? systemInfo.safeAreaInsets.top : 0;
 			this.topInset = safeTop > 0 ? safeTop : 36;
 			console.log(`[LOGIN] 安全区域顶部距离: ${this.topInset}`)
+			
+			if (options['bindPhone'] === '1') {
+				this.bindPhoneMode = true;
+				this.currentMethod = 'phone';
+				console.log('[LOGIN] 绑定手机号模式')
+			}
 		},
 		onUnload() {
 			console.log('[LOGIN] 页面卸载')
@@ -205,9 +205,16 @@
 					
 					saveToStorage();
 					
-					uni.switchTab({
-						url: '/pages/activities/activities'
-					});
+					if (this.bindPhoneMode) {
+						uni.showToast({ title: '绑定成功', icon: 'success' });
+						setTimeout(() => {
+							uni.navigateBack();
+						}, 1000);
+					} else {
+						uni.switchTab({
+							url: '/pages/activities/activities'
+						});
+					}
 				} catch (e) {
 					this.isLoggingIn = false;
 					console.error('[LOGIN] 手机号登录失败', e)
@@ -242,7 +249,12 @@
 						
 						saveToStorage();
 						
-						uni.navigateBack();
+						if (this.bindPhoneMode) {
+							uni.showToast({ title: '绑定成功', icon: 'success' });
+						}
+						setTimeout(() => {
+							uni.navigateBack();
+						}, this.bindPhoneMode ? 1000 : 0);
 					} catch (err) {
 						this.isLoggingIn = false;
 						console.error('[LOGIN] 微信登录失败', err)
@@ -421,6 +433,12 @@
 		font-size: 24px;
 		font-weight: 700;
 		color: #000000;
+	}
+
+	.auth-subtitle {
+		font-size: 14px;
+		color: #8E8E93;
+		margin-top: 8px;
 	}
 
 	.auth-form {

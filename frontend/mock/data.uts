@@ -1,71 +1,76 @@
 
 import { Activity } from '@/store/types.uts'
 
-/**
- * Mock 数据集合。
- *
- * 约定：
- * - MOCK_ACTIVITIES 采用“后端返回的 ActivityResponse 形态”，用于复用 store/index.uts 的 mapBackendToFrontend 转换逻辑；
- * - MOCK_USER 采用后端登录接口返回的 user 形态。
- */
+const now = new Date();
+const todayStr = `${now.getFullYear()}-${(now.getMonth()+1).toString().padStart(2, '0')}-${now.getDate().toString().padStart(2, '0')}`;
+const tomorrowStr = `${now.getFullYear()}-${(now.getMonth()+1).toString().padStart(2, '0')}-${(now.getDate()+1).toString().padStart(2, '0')}`;
+const yesterdayStr = `${now.getFullYear()}-${(now.getMonth()+1).toString().padStart(2, '0')}-${(now.getDate()-1).toString().padStart(2, '0')}`;
 
-// 这里的 MOCK_ACTIVITIES 使用的是后端返回的 ActivityResponse 格式，以便 mapBackendToFrontend 能够正常处理
 export const MOCK_ACTIVITIES: any[] = [
     {
       id: 1,
       organizer_id: 1,
       name: "产品发布会",
       type: "meeting",
-      start_time: "2023-06-15T14:00:00",
+      start_time: `${todayStr}T14:00:00`,
       location: "北京国际会议中心",
       description: "欢迎参加我们的年度产品发布会，届时将发布多款创新产品。",
       capacity: 50,
-      status: "ongoing",
+      status: "upcoming",
       views_count: 245,
-      created_at: "2023-06-01T10:00:00Z",
+      created_at: new Date().toISOString(),
       host_phone: "138****8000",
-      host_wechat: "pr****ct",
+      host_wechat: "zentro_helper",
       show_phone: true,
       show_wechat: true,
       registrations: [
-        { id: 1, activity_id: 1, name: "张三", phone: "138****1234", created_at: "2023-06-01T10:00:00Z", checked_in: true },
-        { id: 2, activity_id: 1, name: "李四", phone: "139****5678", created_at: "2023-06-02T11:00:00Z", checked_in: true },
-        { id: 3, activity_id: 1, name: "王五", phone: "136****9012", created_at: "2023-06-03T12:00:00Z", checked_in: true },
-        { id: 4, activity_id: 1, name: "赵六", phone: "137****3456", created_at: "2023-06-04T13:00:00Z", checked_in: true },
-        { id: 5, activity_id: 1, name: "钱七", phone: "135****7890", created_at: "2023-06-05T14:00:00Z", checked_in: false },
-        { id: 6, activity_id: 1, name: "孙八", phone: "134****2345", created_at: "2023-06-06T15:00:00Z", checked_in: false }
+        { id: 1, activity_id: 1, name: "张三", phone: "138****1234", created_at: new Date().toISOString(), checked_in: false },
+        { id: 2, activity_id: 1, name: "李四", phone: "139****5678", created_at: new Date().toISOString(), checked_in: false }
       ],
-      checkin_records: [
-        { id: 1, registration_id: 1, activity_id: 1, checkin_time: "2023-06-15T14:05:00" },
-        { id: 2, registration_id: 2, activity_id: 1, checkin_time: "2023-06-15T14:10:00" },
-        { id: 3, registration_id: 3, activity_id: 1, checkin_time: "2023-06-15T14:15:00" },
-        { id: 4, registration_id: 4, activity_id: 1, checkin_time: "2023-06-15T14:20:00" }
-      ]
+      checkin_records: []
     },
     {
       id: 2,
       organizer_id: 1,
       name: "技术研讨会",
       type: "training",
-      start_time: "2023-05-20T09:30:00",
+      start_time: `${tomorrowStr}T09:30:00`,
       location: "上海科技园区",
       description: "深入探讨最新技术趋势和行业动态。",
       capacity: 40,
-      status: "ended",
+      status: "upcoming",
       views_count: 187,
-      created_at: "2023-05-01T10:00:00Z",
+      created_at: new Date().toISOString(),
       host_phone: "139****9000",
       host_wechat: null,
       show_phone: true,
       show_wechat: false,
+      registrations: [],
+      checkin_records: []
+    },
+    {
+      id: 3,
+      organizer_id: 1,
+      name: "周末户外徒步",
+      type: "social",
+      start_time: `${yesterdayStr}T08:00:00`,
+      location: "香山公园",
+      description: "放松心情，亲近自然，增强团队凝聚力。",
+      capacity: 30,
+      status: "ended",
+      views_count: 890,
+      created_at: new Date().toISOString(),
+      host_phone: null,
+      host_wechat: null,
+      show_phone: false,
+      show_wechat: false,
       registrations: [
-        { id: 10, activity_id: 2, name: "赵六", phone: "137****3456", created_at: "2023-05-10T09:00:00Z", checked_in: true },
-        { id: 11, activity_id: 2, name: "钱七", phone: "135****7890", created_at: "2023-05-11T10:00:00Z", checked_in: true },
-        { id: 12, activity_id: 2, name: "孙八", phone: "134****2345", created_at: "2023-05-12T11:00:00Z", checked_in: false }
+        { id: 10, activity_id: 3, name: "王五", phone: "136****9012", created_at: new Date().toISOString(), checked_in: true },
+        { id: 11, activity_id: 3, name: "赵六", phone: "137****3456", created_at: new Date().toISOString(), checked_in: true }
       ],
       checkin_records: [
-        { id: 5, registration_id: 10, activity_id: 2, checkin_time: "2023-05-20T09:25:00" },
-        { id: 6, registration_id: 11, activity_id: 2, checkin_time: "2023-05-20T09:30:00" }
+        { id: 1, registration_id: 10, activity_id: 3, checkin_time: `${yesterdayStr}T08:05:00` },
+        { id: 2, registration_id: 11, activity_id: 3, checkin_time: `${yesterdayStr}T08:10:00` }
       ]
     }
 ];
