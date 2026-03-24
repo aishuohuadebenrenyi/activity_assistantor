@@ -1,0 +1,89 @@
+<template>
+	<view class="skeleton-card">
+		<view class="skeleton-header">
+			<view class="skeleton-avatar"></view>
+			<view class="skeleton-title"></view>
+		</view>
+		<view class="skeleton-content">
+			<view class="skeleton-line skeleton-line-long"></view>
+			<view class="skeleton-line skeleton-line-medium"></view>
+			<view class="skeleton-line skeleton-line-short"></view>
+		</view>
+		<view class="skeleton-footer">
+			<view class="skeleton-tag"></view>
+			<view class="skeleton-tag"></view>
+		</view>
+	</view>
+</template>
+
+<script>
+	export default {
+		name: 'ActivitySkeleton'
+	}
+</script>
+
+<style scoped>
+	.skeleton-card {
+		background-color: #FFFFFF;
+		border-radius: 12px;
+		padding: 16px;
+		margin-bottom: 12px;
+	}
+
+	.skeleton-header {
+		flex-direction: row;
+		align-items: center;
+		margin-bottom: 12px;
+	}
+
+	.skeleton-avatar {
+		width: 40px;
+		height: 40px;
+		border-radius: 20px;
+		background-color: #F2F2F7;
+		margin-right: 12px;
+	}
+
+	.skeleton-title {
+		flex: 1;
+		height: 20px;
+		background-color: #F2F2F7;
+		border-radius: 4px;
+	}
+
+	.skeleton-content {
+		margin-bottom: 12px;
+	}
+
+	.skeleton-line {
+		height: 14px;
+		background-color: #F2F2F7;
+		border-radius: 4px;
+		margin-bottom: 8px;
+	}
+
+	.skeleton-line-long {
+		width: 100%;
+	}
+
+	.skeleton-line-medium {
+		width: 75%;
+	}
+
+	.skeleton-line-short {
+		width: 50%;
+	}
+
+	.skeleton-footer {
+		flex-direction: row;
+		justify-content: flex-start;
+	}
+
+	.skeleton-tag {
+		width: 60px;
+		height: 24px;
+		background-color: #F2F2F7;
+		border-radius: 12px;
+		margin-right: 8px;
+	}
+</style>

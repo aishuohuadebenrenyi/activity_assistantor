@@ -79,7 +79,7 @@ class SmsService:
             
             access_key_id = os.environ.get('ALIYUN_SMS_ACCESS_KEY_ID')
             access_key_secret = os.environ.get('ALIYUN_SMS_ACCESS_KEY_SECRET')
-            sign_name = os.environ.get('ALIYUN_SMS_SIGN_NAME', '活动帮手')
+            sign_name = os.environ.get('ALIYUN_SMS_SIGN_NAME', 'Zentro 活动帮手')
             template_code = os.environ.get('ALIYUN_SMS_TEMPLATE_CODE')
             
             client = AcsClient(access_key_id, access_key_secret, 'cn-hangzhou')

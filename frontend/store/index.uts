@@ -199,37 +199,88 @@ function mapBackendToFrontend(data: ActivityResponse): Activity {
     host_phone: data.host_phone ?? null,
     checkinRecords: checkinRecords,
     registrations: registrations,
-    createdAt: data.created_at
+    createdAt: data.created_at,
+    syncStatus: 'synced'
   } as Activity;
 }
 
-export const fetchActivities = async () => {
+export type PaginationState = {
+  page: number;
+  pageSize: number;
+  total: number;
+  hasMore: boolean;
+}
+
+export const paginationState = reactive({
+  page: 1,
+  pageSize: 20,
+  total: 0,
+  hasMore: true
+} as PaginationState);
+
+type PaginatedActivitiesResponse = {
+  activities: ActivityResponse[];
+  total: number;
+  page: number;
+  page_size: number;
+  has_more: boolean;
+}
+
+export const fetchActivities = async (page: number = 1, append: boolean = false) => {
   /**
-   * 拉取活动列表并写入 store（页面 onShow 时调用）。
+   * 拉取活动列表并写入 store（支持分页）。
+   *
+   * 参数：
+   * - page: 页码，默认1
+   * - append: 是否追加到现有列表（用于加载更多）
    *
    * 返回：
    * - Promise<void>
-   *
-   * 错误处理：
-   * - Mock 模式下由 mock/index.uts 返回数据；
-   * - 真实后端失败时写入 error 供 UI 提示。
    */
   activitiesState.isLoading = true;
   activitiesState.error = '';
   
   try {
-    const res = await request<ActivityResponse[]>(new RequestOptions('/activities', 'GET'));
-    activitiesState.activities = res.map((item) => mapBackendToFrontend(item));
+    const res = await request<PaginatedActivitiesResponse>(
+      new RequestOptions(`/activities?page=${page}&page_size=${paginationState.pageSize}`, 'GET')
+    );
+    
+    const newActivities = res.activities.map((item) => mapBackendToFrontend(item));
+    
+    if (append) {
+      activitiesState.activities = [...activitiesState.activities, ...newActivities];
+    } else {
+      activitiesState.activities = newActivities;
+    }
+    
+    paginationState.page = res.page;
+    paginationState.total = res.total;
+    paginationState.hasMore = res.has_more;
+    
     saveToStorage();
   } catch (e) {
     console.error("Fetch activities failed", e);
-    // 如果不是因为 Mock 导致的错误，显示错误提示
     if (!config.USE_MOCK) {
         activitiesState.error = "加载失败，请检查网络";
     }
   } finally {
     activitiesState.isLoading = false;
   }
+};
+
+export const loadMoreActivities = async () => {
+  /**
+   * 加载更多活动（分页加载下一页）。
+   *
+   * 返回：
+   * - Promise<void>
+   */
+  if (!paginationState.hasMore || activitiesState.isLoading) {
+    return;
+  }
+  
+  const nextPage = paginationState.page + 1;
+  await fetchActivities(nextPage, true);
 };
 
 export const addActivity = async (activity: Activity): Promise<Activity> => {
@@ -265,15 +316,14 @@ export const addActivity = async (activity: Activity): Promise<Activity> => {
     logEvent('activity_create_success', { id: realActivity.id, name: realActivity.name });
     return realActivity;
   } catch (e) {
-    // 如果是离线队列错误，不回滚，保留在本地（状态可能需要标记为 syncing）
+    // 如果是离线队列错误，不回滚，保留在本地
     if (e instanceof Error && e.message === 'OFFLINE_QUEUED') {
         console.log('Activity creation queued offline');
-        // 这里可以给 activity 加个标记，比如 activity.syncStatus = 'pending'
-        // 但为了简化，暂不处理，用户看到的是“已创建”
-        // 实际上返回的是 input activity，缺少 id。
-        // 如果 UI 依赖 id 跳转，会有问题。
-        // 临时方案：给个随机负数 ID
+        // 给活动分配临时负数 ID，并标记为待同步状态
         activity.id = -Date.now(); 
+        activity.syncStatus = 'pending';
+        saveToStorage();
+        logEvent('activity_create_offline_queued', { tempId: activity.id, name: activity.name });
         return activity;
     }
 

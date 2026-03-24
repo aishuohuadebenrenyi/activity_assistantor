@@ -30,19 +30,23 @@ activity_bp = Blueprint('activity', __name__)
 @activity_bp.route('/', methods=['GET'])
 def get_activities():
     """
-    获取活动列表。
+    获取活动列表（支持分页）。
 
     Query 参数：
     - status: 可选，all/ongoing/upcoming/ended，不传则返回全部；
-    - search: 可选，按活动名称或地点模糊搜索。
+    - search: 可选，按活动名称或地点模糊搜索；
+    - page: 可选，页码，默认1；
+    - page_size: 可选，每页数量，默认20，最大100。
 
     返回：
-    - 200: 活动数组（列表场景不包含报名/签到明细，减少流量与敏感信息暴露）。
+    - 200: {activities: 活动数组, total: 总数, page: 当前页, page_size: 每页数量, has_more: 是否有更多}
     """
     logger.info("[ACTIVITY] 获取活动列表请求")
     
     status = request.args.get('status')
     search = request.args.get('search')
+    page = int(request.args.get('page', 1))
+    page_size = min(int(request.args.get('page_size', 20)), 100)
     
     query = Activity.query
     
@@ -53,11 +57,25 @@ def get_activities():
     if search:
         query = query.filter(Activity.name.contains(search) | Activity.location.contains(search))
         logger.debug(f"[ACTIVITY] 搜索关键词: {search}")
-        
-    activities = query.order_by(Activity.start_time.desc()).all()
-    logger.info(f"[ACTIVITY] 返回 {len(activities)} 个活动")
     
-    return jsonify([a.to_dict(include_registrations=False) for a in activities])
+    total = query.count()
+    
+    activities = query.order_by(Activity.start_time.desc()) \
+        .offset((page - 1) * page_size) \
+        .limit(page_size) \
+        .all()
+    
+    has_more = (page * page_size) < total
+    
+    logger.info(f"[ACTIVITY] 返回 {len(activities)} 个活动，共 {total} 个，第 {page} 页")
+    
+    return jsonify({
+        'activities': [a.to_dict(include_registrations=False) for a in activities],
+        'total': total,
+        'page': page,
+        'page_size': page_size,
+        'has_more': has_more
+    })
 
 @activity_bp.route('/', methods=['POST'])
 @auth_required

@@ -188,6 +188,12 @@ def login():
     if not phone or not code:
         logger.warning("[AUTH] 手机号登录失败: 参数缺失")
         return jsonify({'error': '手机号和验证码不能为空'}), 400
+    
+    # 手机号格式校验（中国大陆手机号）
+    import re
+    if not re.match(r'^1[3-9]\d{9}$', phone):
+        logger.warning(f"[AUTH] 手机号登录失败: 手机号格式错误 - {phone[:3]}****{phone[-4:] if len(phone) >= 7 else phone}")
+        return jsonify({'error': '请输入正确的手机号'}), 400
         
     cached_code = get_code(phone)
     if not cached_code or str(cached_code) != str(code):
@@ -407,7 +413,8 @@ def verify_apple_token(identity_token):
         
         expected_bundle_id = os.environ.get('APPLE_BUNDLE_ID', 'com.yourcompany.activityassistant')
         if aud != expected_bundle_id:
-            logger.warning(f"[AUTH] Apple Token aud 不匹配: {aud} (期望: {expected_bundle_id})")
+            logger.error(f"[AUTH] Apple Token aud 不匹配: {aud} (期望: {expected_bundle_id})")
+            return None
         
         logger.info(f"[AUTH] Apple Token 验证通过: sub={sub[:8]}...")
         return sub

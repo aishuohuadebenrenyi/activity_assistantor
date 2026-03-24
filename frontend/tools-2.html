@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>活动帮手 - 轻松管理您的活动</title>
+    <title>Zentro 活动帮手 - 轻松管理您的活动</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         /* iOS风格全局样式 */
@@ -3415,7 +3415,7 @@
                     <div class="auth-logo">
                         <i class="fas fa-calendar-alt"></i>
                     </div>
-                    <h1 class="auth-title">活动帮手</h1>
+                    <h1 class="auth-title">Zentro 活动帮手</h1>
                 </div>
 
                 <!-- 登录表单 -->
@@ -3926,11 +3926,11 @@
                         </div>
 
 
-        <!-- 关于活动帮手页面 -->
+        <!-- 关于Zentro 活动帮手页面 -->
         <div id="about-page" class="page">
             <div class="nav-bar">
                 <div class="nav-button left" onclick="showPage('profile-page')">返回</div>
-                <div class="nav-title">关于活动帮手</div>
+                <div class="nav-title">关于Zentro 活动帮手</div>
                 <div class="nav-button right" style="visibility: hidden;"></div>
                     </div>
 
@@ -3943,7 +3943,7 @@
                                 <i class="fas fa-calendar-alt"></i>
                             </div>
                             <div class="app-details">
-                                <h3 class="app-name">活动帮手</h3>
+                                <h3 class="app-name">Zentro 活动帮手</h3>
                                 <p class="app-version">版本 1.0.0</p>
                                 <p class="app-desc">轻松管理您的活动</p>
                             </div>
@@ -3997,7 +3997,7 @@
                 <div class="card">
                     <div class="card-content">
                         <div class="copyright-info">
-                            <p class="copyright-text">© 2024 活动帮手</p>
+                            <p class="copyright-text">© 2024 Zentro 活动帮手</p>
                             <p class="copyright-desc">让活动管理更简单</p>
                         </div>
                     </div>
@@ -4123,7 +4123,7 @@
                     <div class="settings-item" onclick="showPage('about-page')">
                         <div class="settings-icon"><i class="fas fa-info-circle"></i></div>
                         <div class="settings-content">
-                            <div class="settings-label">关于活动帮手</div>
+                            <div class="settings-label">关于Zentro 活动帮手</div>
                             <div class="settings-desc">版本信息、隐私政策</div>
                         </div>
                         <div class="settings-arrow"><i class="fas fa-chevron-right"></i></div>
@@ -6220,7 +6220,7 @@
                     createTime: new Date().toISOString()
                 }));
                 
-                showToast('注册成功，欢迎使用活动帮手！');
+                showToast('注册成功，欢迎使用Zentro 活动帮手！');
             } else {
                 // 老用户登录
                 const userData = JSON.parse(localStorage.getItem('user_' + phone));
@@ -6463,7 +6463,7 @@
             // 模拟分享应用
             if (navigator.share) {
                 navigator.share({
-                    title: '活动帮手',
+                    title: 'Zentro 活动帮手',
                     text: '推荐一个很好用的活动管理应用',
                     url: window.location.href
                 }).then(() => {

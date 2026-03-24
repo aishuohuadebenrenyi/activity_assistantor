@@ -1,4 +1,4 @@
-# 活动帮手 前端 (Activity Assistant Frontend)
+# Zentro 活动帮手 前端 (Activity Assistant Frontend)
 
 本项目是基于 **uni-app x (UTS)** 开发的跨平台活动管理应用前端。
 

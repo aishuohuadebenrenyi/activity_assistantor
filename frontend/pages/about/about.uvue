@@ -2,14 +2,14 @@
 	<view class="container">
 		<view class="logo-section">
 			<text class="logo-icon">📅</text>
-			<text class="app-name">活动帮手</text>
+			<text class="app-name">Zentro</text>
 			<text class="version">Version 1.0.0</text>
 		</view>
 
 		<view class="card">
 			<view class="card-item" @click="openWebsite" hover-class="hover-opacity">
 				<text class="item-label">官方网站</text>
-				<text class="item-value">www.activityhelper.com</text>
+				<text class="item-value">www.zentro.app</text>
 			</view>
 			<view class="card-item" @click="openPrivacy" hover-class="hover-opacity">
 				<text class="item-label">隐私政策</text>
@@ -22,7 +22,7 @@
 		</view>
 
 		<view class="footer">
-			<text class="copyright">Copyright © 2024 活动帮手. All Rights Reserved.</text>
+			<text class="copyright">Copyright © 2024 Zentro. All Rights Reserved.</text>
 		</view>
 	</view>
 </template>
@@ -33,7 +33,7 @@
 	export default {
 		methods: {
 			openWebsite() {
-				this.openUrl('https://www.activityhelper.com')
+				this.openUrl('https://www.zentro.app')
 			},
 			openPrivacy() {
 				const url = config.PRIVACY_POLICY_URL

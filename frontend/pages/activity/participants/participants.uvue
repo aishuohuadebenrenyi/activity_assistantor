@@ -381,7 +381,7 @@ type Participant = {
 						});
 						uni.hideLoading();
 					} else {
-						await request(new RequestOptions(`/participants/${this.activityId}/checkin`, 'POST', { registration_id: participant.id }));
+						await request(new RequestOptions(`/activities/${this.activityId}/checkin`, 'POST', { registration_id: participant.id }));
 						await this.updateLocalCheckinStatus(participant.id);
 						uni.hideLoading();
 						uni.showToast({ title: '签到成功', icon: 'success' });
@@ -394,7 +394,7 @@ type Participant = {
 			async doCancelCheckin(participant: Participant) {
 				uni.showLoading({ title: '取消签到中...' });
 				try {
-					await request(new RequestOptions(`/participants/${this.activityId}/checkin/${participant.id}`, 'DELETE'));
+					await request(new RequestOptions(`/activities/${this.activityId}/checkin/${participant.id}`, 'DELETE'));
 					
 					const currentActivity = activitiesState.activities.find((a: Activity): boolean => a.id === this.activityId);
 					if (currentActivity != null) {

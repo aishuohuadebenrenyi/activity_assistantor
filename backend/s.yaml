@@ -14,7 +14,7 @@ services:
       region: ${vars.region}
       service:
         name: ${vars.serviceName}
-        description: 活动帮手后端服务
+        description: Zentro 活动帮手后端服务
         internetAccess: true
         logConfig: auto
         vpcConfig:

@@ -1,0 +1,203 @@
+
+/**
+ * 设置工具模块
+ * 
+ * 职责：
+ * - 通知权限请求与状态检测
+ * - 主题设置持久化与系统主题同步
+ * - 跳转系统设置功能
+ */
+
+export type NotificationPermissionStatus = {
+  authorized: boolean;
+  canRequest: boolean;
+  isDenied: boolean;
+}
+
+export type ThemeMode = 'light' | 'dark' | 'auto';
+
+export type ThemeSettings = {
+  mode: ThemeMode;
+  currentTheme: 'light' | 'dark';
+}
+
+const NOTIFICATION_SETTINGS_KEY = 'notification_settings';
+const THEME_SETTINGS_KEY = 'theme_settings';
+
+export type NotificationSettings = {
+  enabled: boolean;
+  activityReminder: boolean;
+  checkinReminder: boolean;
+  marketingNotify: boolean;
+}
+
+export const defaultNotificationSettings: NotificationSettings = {
+  enabled: false,
+  activityReminder: true,
+  checkinReminder: true,
+  marketingNotify: false
+}
+
+export const defaultThemeSettings: ThemeSettings = {
+  mode: 'auto',
+  currentTheme: 'light'
+}
+
+export function requestNotificationPermission(): Promise<boolean> {
+  return new Promise((resolve) => {
+    // #ifdef APP-PLUS
+    if (uni.getSystemInfoSync().platform === 'ios') {
+      plus.push.getClientInfo({
+        success: () => {
+          resolve(true);
+        },
+        fail: () => {
+          resolve(false);
+        }
+      });
+    } else {
+      resolve(true);
+    }
+    // #endif
+    
+    // #ifndef APP-PLUS
+    resolve(true);
+    // #endif
+  });
+}
+
+export function checkNotificationPermission(): Promise<NotificationPermissionStatus> {
+  return new Promise((resolve) => {
+    // #ifdef APP-PLUS
+    if (uni.getSystemInfoSync().platform === 'ios') {
+      plus.runtime.openURL('app-settings:', (err) => {
+        console.log('Cannot open settings', err);
+      });
+      resolve({
+        authorized: false,
+        canRequest: false,
+        isDenied: true
+      });
+    } else {
+      resolve({
+        authorized: true,
+        canRequest: true,
+        isDenied: false
+      });
+    }
+    // #endif
+    
+    // #ifndef APP-PLUS
+    resolve({
+      authorized: true,
+      canRequest: true,
+      isDenied: false
+    });
+    // #endif
+  });
+}
+
+export function openSystemSettings(): void {
+  // #ifdef APP-PLUS
+  if (uni.getSystemInfoSync().platform === 'ios') {
+    plus.runtime.openURL('app-settings:');
+  } else {
+    const main = plus.android.runtimeMainActivity();
+    const Intent = plus.android.importClass('android.content.Intent');
+    const Settings = plus.android.importClass('android.provider.Settings');
+    const Uri = plus.android.importClass('android.net.Uri');
+    const intent = new Intent();
+    intent.setAction(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
+    const uri = Uri.fromParts('package', main.getPackageName(), null);
+    intent.setData(uri);
+    main.startActivity(intent);
+  }
+  // #endif
+  
+  // #ifdef H5
+  console.log('H5 cannot open system settings');
+  // #endif
+}
+
+export function saveNotificationSettings(settings: NotificationSettings): void {
+  try {
+    uni.setStorageSync(NOTIFICATION_SETTINGS_KEY, settings);
+  } catch (e) {
+    console.error('Failed to save notification settings', e);
+  }
+}
+
+export function loadNotificationSettings(): NotificationSettings {
+  try {
+    const data = uni.getStorageSync(NOTIFICATION_SETTINGS_KEY);
+    if (data != null) {
+      return data as NotificationSettings;
+    }
+  } catch (e) {
+    console.error('Failed to load notification settings', e);
+  }
+  return { ...defaultNotificationSettings };
+}
+
+export function saveThemeSettings(settings: ThemeSettings): void {
+  try {
+    uni.setStorageSync(THEME_SETTINGS_KEY, settings);
+  } catch (e) {
+    console.error('Failed to save theme settings', e);
+  }
+}
+
+export function loadThemeSettings(): ThemeSettings {
+  try {
+    const data = uni.getStorageSync(THEME_SETTINGS_KEY);
+    if (data != null) {
+      return data as ThemeSettings;
+    }
+  } catch (e) {
+    console.error('Failed to load theme settings', e);
+  }
+  return { ...defaultThemeSettings };
+}
+
+export function getSystemTheme(): 'light' | 'dark' {
+  try {
+    const info = uni.getAppBaseInfo();
+    if (info != null && info.theme != null) {
+      return info.theme as 'light' | 'dark';
+    }
+  } catch (e) {
+    console.log('Cannot get system theme', e);
+  }
+  return 'light';
+}
+
+export function applyTheme(mode: ThemeMode): 'light' | 'dark' {
+  let currentTheme: 'light' | 'dark' = 'light';
+  
+  if (mode === 'auto') {
+    currentTheme = getSystemTheme();
+  } else {
+    currentTheme = mode;
+  }
+  
+  // #ifdef APP-PLUS
+  if (uni.getSystemInfoSync().platform === 'ios') {
+    plus.nativeUI.setUIStyle(currentTheme);
+  }
+  // #endif
+  
+  return currentTheme;
+}
+
+export function getThemeLabel(mode: ThemeMode): string {
+  switch (mode) {
+    case 'light':
+      return '浅色模式';
+    case 'dark':
+      return '深色模式';
+    case 'auto':
+      return '跟随系统';
+    default:
+      return '浅色模式';
+  }
+}

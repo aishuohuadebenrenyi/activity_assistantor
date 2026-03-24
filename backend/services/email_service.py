@@ -130,7 +130,7 @@ class EmailService:
         返回：
         - bool: 是否发送成功
         """
-        subject = f"【活动帮手】报名名单导出 - {activity_name}"
+        subject = f"【Zentro 活动帮手】报名名单导出 - {activity_name}"
         body = f"""您好！
 
 您请求导出的活动报名名单已生成，请查看附件。
@@ -140,7 +140,7 @@ class EmailService:
 
 如有问题，请回复此邮件。
 
-活动帮手团队
+Zentro 活动帮手团队
 """
         attachment = csv_content.encode('utf-8-sig')
         filename = f"报名名单_{activity_name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"

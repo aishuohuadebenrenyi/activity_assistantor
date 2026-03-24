@@ -64,8 +64,10 @@ def create_app(config_class=Config):
     )
     
     # 启用 Talisman (强制 HTTPS, 设置安全响应头)
-    # 注意：在开发环境下如果不用 HTTPS，可以设置 force_https=False
-    Talisman(app, force_https=False) 
+    # 生产环境必须启用 HTTPS：force_https=True
+    # 开发环境可以设置 force_https=False
+    force_https = os.environ.get('FORCE_HTTPS', 'false').lower() == 'true'
+    Talisman(app, force_https=force_https) 
     
     # 注册蓝图 (Blueprints)
     # 认证模块：处理登录、注册等

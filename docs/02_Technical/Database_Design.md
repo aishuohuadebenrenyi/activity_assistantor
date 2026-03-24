@@ -1,6 +1,6 @@
 # 数据库设计文档 (Database Design)
 
-> **Version**: v6.2.0 | **Last Updated**: 2026-03-15
+> **Version**: v1.0.0 | **Last Updated**: 2026-03-24
 
 ## 1. 修订历史
 

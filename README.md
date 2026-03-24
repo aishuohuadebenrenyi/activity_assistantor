@@ -1,6 +1,6 @@
-# 活动帮手 (Activity Assistant)
+# Zentro
 
-活动帮手是一款基于 **uni-app x (UTS)** 和 **Python Flask** 开发的全栈活动管理应用。本项目采用前后端分离架构，前端运行在 iOS/Android 平台，后端部署于阿里云函数计算 (FC)。
+Zentro 是一款基于 **uni-app x (UTS)** 和 **Python Flask** 开发的全栈活动管理应用。本项目采用前后端分离架构，前端运行在 iOS/Android 平台，后端部署于阿里云函数计算 (FC)。
 
 ## 📚 项目简介
 

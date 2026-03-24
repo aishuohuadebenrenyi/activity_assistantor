@@ -98,13 +98,13 @@
 							<text class="arrow">></text>
 						</view>
 					</view>
-					<view class="list-item" @click="showNotifyModal = true" hover-class="hover-opacity">
+					<view class="list-item" @click="openNotificationSettings" hover-class="hover-opacity">
 						<view class="list-item-left">
 							<text class="list-icon">🔔</text>
 							<text class="list-label">通知设置</text>
 						</view>
 						<view class="list-item-right">
-							<text class="list-value">{{ notifyEnabled ? '已开启' : '已关闭' }}</text>
+							<text class="list-value" :class="notificationStatusClass">{{ notificationStatusLabel }}</text>
 							<text class="arrow">></text>
 						</view>
 					</view>
@@ -145,7 +145,7 @@
 					<view class="list-item" @click="goToAbout" hover-class="hover-opacity">
 						<view class="list-item-left">
 							<text class="list-icon">ℹ️</text>
-							<text class="list-label">关于活动帮手</text>
+							<text class="list-label">关于Zentro 活动帮手</text>
 						</view>
 						<text class="arrow">></text>
 					</view>
@@ -154,7 +154,7 @@
 		</scroll-view>
 
 		<!-- #ifndef MP-WEIXIN -->
-		<!-- 主题选择模态框 (模拟 tools-2.html) -->
+		<!-- 主题选择模态框 -->
 		<view v-if="showThemeModal" class="modal-overlay" @click="showThemeModal = false">
 			<view class="modal-content" @click.stop>
 				<view class="modal-header">
@@ -168,8 +168,8 @@
 						@click="setTheme(t.value)"
 						hover-class="hover-opacity"
 					>
-						<text :class="['modal-item-text', currentTheme === t.value ? 'active-text' : '']">{{ t.label }}</text>
-						<text v-if="currentTheme === t.value" class="check-icon">✓</text>
+						<text :class="['modal-item-text', currentThemeMode === t.value ? 'active-text' : '']">{{ t.label }}</text>
+						<text v-if="currentThemeMode === t.value" class="check-icon">✓</text>
 					</view>
 				</view>
 				<view class="modal-footer" @click="showThemeModal = false">
@@ -185,13 +185,36 @@
 					<text class="modal-title">通知设置</text>
 				</view>
 				<view class="modal-body">
+					<!-- 系统权限状态提示 -->
+					<view v-if="!systemNotificationAuthorized" class="permission-warning">
+						<text class="warning-icon">⚠️</text>
+						<text class="warning-text">系统通知权限未开启，请前往系统设置开启</text>
+						<button class="btn btn-primary btn-sm" @click="openSystemSettings">
+							<text class="btn-text btn-text-sm">去设置</text>
+						</button>
+					</view>
+					
 					<text class="modal-desc">开启通知后，您将收到活动报名和签到的实时提醒。</text>
+					
+					<!-- 主开关 -->
 					<view class="switch-row">
 						<text class="switch-label">接收实时通知</text>
-						<switch :checked="notifyEnabled" @change="toggleNotify" color="#007AFF" />
+						<switch :checked="notificationSettings.enabled" @change="toggleMainNotify" color="#007AFF" />
+					</view>
+					
+					<!-- 详细设置 -->
+					<view v-if="notificationSettings.enabled" class="detail-settings">
+						<view class="switch-row sub-switch">
+							<text class="switch-label">活动提醒</text>
+							<switch :checked="notificationSettings.activityReminder" @change="toggleActivityReminder" color="#007AFF" />
+						</view>
+						<view class="switch-row sub-switch">
+							<text class="switch-label">签到提醒</text>
+							<switch :checked="notificationSettings.checkinReminder" @change="toggleCheckinReminder" color="#007AFF" />
+						</view>
 					</view>
 				</view>
-				<view class="modal-footer" @click="showNotifyModal = false">
+				<view class="modal-footer" @click="closeNotifyModal">
 					<text class="modal-footer-text">完成</text>
 				</view>
 			</view>
@@ -202,18 +225,35 @@
 
 <script>
 	import { activitiesState, deleteUserAccount } from '@/store/index.uts'
+	import { 
+		loadNotificationSettings, 
+		saveNotificationSettings, 
+		loadThemeSettings, 
+		saveThemeSettings, 
+		openSystemSettings as openSystemSettingsUtil,
+		applyTheme,
+		getThemeLabel,
+		type NotificationSettings,
+		type ThemeMode
+	} from '@/utils/settings.uts'
 
 	export default {
 		data() {
 			return {
 				showThemeModal: false,
 				showNotifyModal: false,
-				currentTheme: 'light',
-				notifyEnabled: true,
+				currentThemeMode: 'auto' as ThemeMode,
+				notificationSettings: {
+					enabled: false,
+					activityReminder: true,
+					checkinReminder: true,
+					marketingNotify: false
+				} as NotificationSettings,
+				systemNotificationAuthorized: false,
 				themeOptions: [
-					{ label: '浅色模式', value: 'light' },
-					{ label: '深色模式', value: 'dark' },
-					{ label: '跟随系统', value: 'auto' }
+					{ label: '浅色模式', value: 'light' as ThemeMode },
+					{ label: '深色模式', value: 'dark' as ThemeMode },
+					{ label: '跟随系统', value: 'auto' as ThemeMode }
 				]
 			}
 		},
@@ -235,12 +275,56 @@
 			totalParticipants() {
 				return activitiesState.activities.reduce((sum, a) => sum + (a.participants || 0), 0);
 			},
-			themeLabel() {
-				const option = this.themeOptions.find(o => o.value === this.currentTheme);
-				return option ? option.label : '浅色模式';
+			themeLabel(): string {
+				return getThemeLabel(this.currentThemeMode);
+			},
+			notificationStatusLabel(): string {
+				if (!this.systemNotificationAuthorized) {
+					return '未授权';
+				}
+				return this.notificationSettings.enabled ? '已开启' : '已关闭';
+			},
+			notificationStatusClass(): string {
+				if (!this.systemNotificationAuthorized) {
+					return 'status-warning';
+				}
+				return this.notificationSettings.enabled ? 'status-success' : 'status-default';
 			}
 		},
+		onLoad() {
+			this.loadSettings();
+		},
+		onShow() {
+			this.checkNotificationPermission();
+		},
 		methods: {
+			loadSettings() {
+				const themeSettings = loadThemeSettings();
+				this.currentThemeMode = themeSettings.mode;
+				
+				const notifySettings = loadNotificationSettings();
+				this.notificationSettings = { ...notifySettings };
+			},
+			checkNotificationPermission() {
+				// #ifdef APP-PLUS
+				if (uni.getSystemInfoSync().platform === 'ios') {
+					plus.push.getClientInfo({
+						success: () => {
+							this.systemNotificationAuthorized = true;
+						},
+						fail: () => {
+							this.systemNotificationAuthorized = false;
+						}
+					});
+				} else {
+					this.systemNotificationAuthorized = true;
+				}
+				// #endif
+				
+				// #ifndef APP-PLUS
+				this.systemNotificationAuthorized = true;
+				// #endif
+			},
 			goToEdit() {
 				uni.navigateTo({ url: '/pages/profile/edit/edit' });
 			},
@@ -261,13 +345,51 @@
 					}
 				});
 			},
-			setTheme(theme) {
-				this.currentTheme = theme;
+			setTheme(theme: ThemeMode) {
+				this.currentThemeMode = theme;
+				const currentTheme = applyTheme(theme);
+				saveThemeSettings({
+					mode: theme,
+					currentTheme: currentTheme
+				});
 				this.showThemeModal = false;
 				uni.showToast({ title: '主题设置成功', icon: 'none' });
 			},
-			toggleNotify(e) {
-				this.notifyEnabled = e.detail.value;
+			openNotificationSettings() {
+				this.checkNotificationPermission();
+				this.showNotifyModal = true;
+			},
+			openSystemSettings() {
+				openSystemSettingsUtil();
+			},
+			toggleMainNotify(e: any) {
+				const checked = e.detail.value as boolean;
+				if (checked && !this.systemNotificationAuthorized) {
+					uni.showModal({
+						title: '开启通知',
+						content: '需要您在系统设置中允许应用发送通知，是否前往设置？',
+						confirmText: '去设置',
+						success: (res) => {
+							if (res.confirm) {
+								openSystemSettingsUtil();
+							}
+						}
+					});
+					return;
+				}
+				this.notificationSettings.enabled = checked;
+				saveNotificationSettings(this.notificationSettings);
+			},
+			toggleActivityReminder(e: any) {
+				this.notificationSettings.activityReminder = e.detail.value as boolean;
+				saveNotificationSettings(this.notificationSettings);
+			},
+			toggleCheckinReminder(e: any) {
+				this.notificationSettings.checkinReminder = e.detail.value as boolean;
+				saveNotificationSettings(this.notificationSettings);
+			},
+			closeNotifyModal() {
+				this.showNotifyModal = false;
 			},
 			onFeedback() {
 				uni.navigateTo({ url: '/pages/profile/feedback/feedback' });
@@ -289,7 +411,6 @@
 										content: resData.message,
 										showCancel: false,
 										success: () => {
-											// 冷静期申请提交成功后，仍保持登录状态或引导退出
 											uni.showToast({ title: '账号已进入注销冷静期' });
 										}
 									});
@@ -314,8 +435,6 @@
 		flex: 1;
 		background-color: #F2F2F7;
 	}
-
-
 
 	.scroll-content {
 		flex: 1;
@@ -437,12 +556,23 @@
 		margin-right: 8px;
 	}
 
+	.status-success {
+		color: #34C759;
+	}
+
+	.status-warning {
+		color: #FF9500;
+	}
+
+	.status-default {
+		color: #8E8E93;
+	}
+
 	.arrow {
 		font-size: 16px;
 		color: #C7C7CC;
 	}
 
-	/* 模态框样式 */
 	.modal-overlay {
 		position: fixed;
 		top: 0;
@@ -458,7 +588,7 @@
 		background-color: #FFFFFF;
 		border-top-left-radius: 20px;
 		border-top-right-radius: 20px;
-		padding-bottom: 34px; /* 安全距离 */
+		padding-bottom: 34px;
 		animation: slideUp 0.3s ease;
 	}
 
@@ -528,6 +658,28 @@
 		line-height: 1.4;
 	}
 
+	.permission-warning {
+		background-color: #FFF3CD;
+		border-radius: 8px;
+		padding: 12px;
+		margin-bottom: 16px;
+		flex-direction: row;
+		align-items: center;
+		flex-wrap: wrap;
+	}
+
+	.warning-icon {
+		font-size: 16px;
+		margin-right: 8px;
+	}
+
+	.warning-text {
+		font-size: 13px;
+		color: #856404;
+		flex: 1;
+		margin-bottom: 8px;
+	}
+
 	.switch-row {
 		flex-direction: row;
 		justify-content: space-between;
@@ -537,8 +689,18 @@
 		border-bottom: 0.5px solid #F2F2F7;
 	}
 
+	.sub-switch {
+		border-top: none;
+		height: 48px;
+		padding-left: 16px;
+	}
+
 	.switch-label {
 		font-size: 16px;
 		color: #000000;
+	}
+
+	.detail-settings {
+		margin-top: 8px;
 	}
 </style>

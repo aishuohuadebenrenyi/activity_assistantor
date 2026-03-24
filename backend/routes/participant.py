@@ -67,12 +67,29 @@ def register(activity_id):
 
     业务规则：
     - 以 (activity_id, phone) 判断重复报名；重复则返回错误；
+    - 校验活动状态（已结束的活动不可报名）；
+    - 校验活动容量（名额已满不可报名）；
     - 当前 Registration 模型未强制绑定 user_id，因此允许"代报名"或未实名场景。
 
     返回：
     - 201: 报名成功，返回 Registration；
-    - 400: 参数缺失或已报名。
+    - 400: 参数缺失、已报名、活动已结束或名额已满。
     """
+    from datetime import datetime
+    
+    activity = Activity.query.get_or_404(activity_id)
+    
+    if activity.status == 'ended':
+        return jsonify({'error': '活动已结束，无法报名'}), 400
+    
+    if activity.start_time and activity.start_time < datetime.utcnow():
+        return jsonify({'error': '活动已开始，无法报名'}), 400
+    
+    if activity.capacity > 0:
+        current_count = Registration.query.filter_by(activity_id=activity_id).count()
+        if current_count >= activity.capacity:
+            return jsonify({'error': '活动名额已满'}), 400
+    
     data = request.get_json()
     name = data.get('name')
     phone = data.get('phone')

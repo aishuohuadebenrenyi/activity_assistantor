@@ -34,9 +34,11 @@ export type Config = {
 
 export const config: Config = {
   // 注意：真机调试时请将 localhost 替换为电脑的局域网 IP 地址
-  // 生产环境应使用 HTTPS
+  // 生产环境必须使用 HTTPS
+  // 开发环境：使用本地后端地址
   BASE_URL: "http://localhost:9000/api", 
-  // BASE_URL: "https://api.yourdomain.com/api", // 上线时切换为 HTTPS
+  // 生产环境：取消注释并配置真实域名
+  // BASE_URL: "https://api.yourdomain.com/api",
   TIMEOUT: 10000,
   ENCRYPTION_KEY: "your-secure-key", // 本地数据加密密钥 (示例)
   
@@ -45,6 +47,9 @@ export const config: Config = {
   CLEAR_CACHE_ON_START: true, // 是否在启动时清除缓存，用于模拟第一次登录
   
   // 合规性配置 (上架必须)
+  // 生产环境：取消注释并配置真实域名
   PRIVACY_POLICY_URL: "http://localhost:9000/legal/privacy",
+  // PRIVACY_POLICY_URL: "https://yourdomain.com/legal/privacy",
   USER_AGREEMENT_URL: "http://localhost:9000/legal/terms"
+  // USER_AGREEMENT_URL: "https://yourdomain.com/legal/terms"
 }
