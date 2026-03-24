@@ -1,5 +1,5 @@
 
-import { config } from './config.uts'
+import { config, USE_MOCK } from './config.uts'
 import { networkState } from './network_state.uts'
 import { addToQueue, getQueue, saveQueue, QueueItem } from './offline_queue.uts'
 import { RequestOptions } from './api_types.uts'
@@ -35,9 +35,13 @@ export const request = async <T>(options: RequestOptions): Promise<T> => {
    * 鉴权失败策略：
    * - 401 默认触发 reLaunch 到登录页；
    * - 若 header 携带 X-Skip-Auth-Redirect=1，则不跳转（用于埋点/静默请求避免循环）。
+   *
+   * Mock 策略：
+   * - 当 USE_MOCK=true 时，请求被拦截并返回模拟数据；
+   * - 可通过修改 config.uts 中的 DEBUG.USE_MOCK 开关来切换模式。
    */
   // 全局 Mock 拦截
-  if (config.USE_MOCK) {
+  if (USE_MOCK) {
     return await handleMockRequest<T>(options.url, options.method, options.data);
   }
 

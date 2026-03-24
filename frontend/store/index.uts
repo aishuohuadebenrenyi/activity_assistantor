@@ -6,11 +6,11 @@
  * - 维护 activitiesState（页面读取的响应式数据源）；
  * - 封装与后端交互的核心动作（拉取活动、创建/更新/删除、注销、举报）；
  * - 负责把后端数据模型（ActivityResponse 等）映射为前端展示模型（Activity 等）；
- * - 在离线场景下做乐观更新，并配合 request.uts 的离线队列机制实现“先写本地、后重放同步”。
+ * - 在离线场景下做乐观更新，并配合 request.uts 的离线队列机制实现"先写本地、后重放同步"。
  *
- * 注意：
- * - 当前项目同时支持 Mock 与真实后端（由 config.USE_MOCK 控制）；
- * - 离线创建活动时会给临时对象分配负数 ID，避免 UI 依赖 id 时崩溃（后续可扩展为 syncStatus 状态机）。
+ * Mock 策略：
+ * - Mock 模式由 request.uts 统一拦截，业务代码无需关心；
+ * - 离线创建活动时会给临时对象分配负数 ID，避免 UI 依赖 id 时崩溃。
  */
 
 import { reactive } from 'vue'
@@ -260,9 +260,7 @@ export const fetchActivities = async (page: number = 1, append: boolean = false)
     saveToStorage();
   } catch (e) {
     console.error("Fetch activities failed", e);
-    if (!config.USE_MOCK) {
-        activitiesState.error = "加载失败，请检查网络";
-    }
+    activitiesState.error = "加载失败，请检查网络";
   } finally {
     activitiesState.isLoading = false;
   }

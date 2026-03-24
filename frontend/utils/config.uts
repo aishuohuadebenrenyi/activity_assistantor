@@ -15,15 +15,32 @@ export type Config = {
    */
   ENCRYPTION_KEY: string;
   /**
-   * 是否启用全局 Mock。
-   * - true：所有请求走 mock/index.uts，不访问后端
-   * - false：走真实后端 API
+   * 调试模式配置
    */
-  USE_MOCK: boolean;
-  /**
-   * 启动时是否清空缓存（用于演示“首次启动/首次登录”流程）。
-   */
-  CLEAR_CACHE_ON_START: boolean;
+  DEBUG: {
+    /**
+     * 是否启用调试模式
+     * - true：启用调试日志、开发工具等
+     * - false：生产环境
+     */
+    ENABLED: boolean;
+    /**
+     * 是否启用全局 Mock 数据
+     * - true：所有请求走 mock/index.uts，不访问后端
+     * - false：走真实后端 API
+     * 
+     * 使用场景：
+     * - 前端独立开发调试：true（无需启动后端）
+     * - 前后端联调：false
+     * - 演示/Demo：true
+     */
+    USE_MOCK: boolean;
+    /**
+     * 启动时是否清空缓存
+     * - 用于模拟"首次启动/首次登录"流程
+     */
+    CLEAR_CACHE_ON_START: boolean;
+  };
   /**
    * 隐私政策与用户协议的访问地址（合规要求）。
    * 通常由后端提供静态页面或由官网承载。
@@ -33,23 +50,44 @@ export type Config = {
 }
 
 export const config: Config = {
+  // ========================================
+  // 后端 API 配置
+  // ========================================
   // 注意：真机调试时请将 localhost 替换为电脑的局域网 IP 地址
   // 生产环境必须使用 HTTPS
-  // 开发环境：使用本地后端地址
   BASE_URL: "http://localhost:9000/api", 
   // 生产环境：取消注释并配置真实域名
   // BASE_URL: "https://api.yourdomain.com/api",
+  
   TIMEOUT: 10000,
-  ENCRYPTION_KEY: "your-secure-key", // 本地数据加密密钥 (示例)
+  ENCRYPTION_KEY: "your-secure-key",
   
-  // 全局 Mock 配置
-  USE_MOCK: true, // 是否启用全局 Mock 数据
-  CLEAR_CACHE_ON_START: true, // 是否在启动时清除缓存，用于模拟第一次登录
+  // ========================================
+  // 调试模式配置（本地开发使用）
+  // ========================================
+  DEBUG: {
+    // 是否启用调试模式
+    ENABLED: true,
+    
+    // 是否使用 Mock 数据（本地调试开关）
+    // true: 使用前端模拟数据，无需后端服务
+    // false: 连接真实后端 API
+    USE_MOCK: true,
+    
+    // 启动时清空缓存（模拟首次安装）
+    CLEAR_CACHE_ON_START: true
+  },
   
-  // 合规性配置 (上架必须)
-  // 生产环境：取消注释并配置真实域名
+  // ========================================
+  // 合规性配置（上架必须）
+  // ========================================
   PRIVACY_POLICY_URL: "http://localhost:9000/legal/privacy",
-  // PRIVACY_POLICY_URL: "https://yourdomain.com/legal/privacy",
   USER_AGREEMENT_URL: "http://localhost:9000/legal/terms"
+  // 生产环境：取消注释并配置真实域名
+  // PRIVACY_POLICY_URL: "https://yourdomain.com/legal/privacy",
   // USER_AGREEMENT_URL: "https://yourdomain.com/legal/terms"
 }
+
+// 兼容旧代码的快捷访问
+export const USE_MOCK = config.DEBUG.USE_MOCK
+export const CLEAR_CACHE_ON_START = config.DEBUG.CLEAR_CACHE_ON_START

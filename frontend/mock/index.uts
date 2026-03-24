@@ -11,26 +11,44 @@ export const delay = (ms: number = 500): Promise<void> => {
 
 /**
  * 拦截请求并返回 Mock 数据
+ * 
+ * 设计原则：
+ * - 所有Mock逻辑集中在此文件，业务代码无需关心Mock状态
+ * - 返回数据结构与后端API保持一致
+ * - 写操作做内存态更新，模拟“数据被保存”的用户体验
  */
 export const handleMockRequest = async <T>(url: string, method: string, data: any | null): Promise<T> => {
-  /**
-   * Mock 路由分发器：在 config.USE_MOCK=true 时由 request.uts 调用。
-   *
-   * 设计目标：
-   * - 用尽量贴近后端的响应结构，保证页面与 store 转换逻辑可在无后端时运行；
-   * - 对部分写操作（PUT）做内存态更新，模拟“数据被保存”的用户体验。
-   *
-   * 参数：
-   * - url: 业务路径（不含 BASE_URL）
-   * - method: HTTP 方法
-   * - data: 请求体（JSON）
-   */
   await delay();
   
   console.log(`[Mock] ${method} ${url}`, data);
   
+  // ========================================
+  // 活动相关 API
+  // ========================================
   if (url === '/activities' && method === 'GET') {
-    return MOCK_ACTIVITIES as T;
+    // 支持分页参数
+    const pageMatch = url.match(/page=(\d+)/);
+    const pageSizeMatch = url.match(/page_size=(\d+)/);
+    const page = pageMatch ? parseInt(pageMatch[1]) : 1;
+    const pageSize = pageSizeMatch ? parseInt(pageSizeMatch[1]) : 20;
+    
+    return {
+      activities: MOCK_ACTIVITIES,
+      total: MOCK_ACTIVITIES.length,
+      page: page,
+      page_size: pageSize,
+      has_more: false
+    } as T;
+  }
+  
+  if (url.startsWith('/activities?page') && method === 'GET') {
+    return {
+      activities: MOCK_ACTIVITIES,
+      total: MOCK_ACTIVITIES.length,
+      page: 1,
+      page_size: 20,
+      has_more: false
+    } as T;
   }
   
   if (url.startsWith('/activities/') && method === 'GET') {
@@ -61,30 +79,20 @@ export const handleMockRequest = async <T>(url: string, method: string, data: an
     const payload = data != null ? data as UTSJSONObject : {} as UTSJSONObject;
     
     if (activityIndex > -1) {
-        // 更新内存中的 Mock 数据以保持状态同步
         const existing = MOCK_ACTIVITIES[activityIndex] as UTSJSONObject;
-        
-        // 合并基本字段
         const updated = {
             ...existing,
             ...payload
         };
-        
-        // 确保关键字段存在且格式正确 (Backend Model 格式)
         if (payload['date'] != null && payload['time'] != null) {
             updated['start_time'] = `${payload['date']}T${payload['time']}:00`;
         }
-        
-        // 保持嵌套结构 (registrations, checkin_records)
         updated['registrations'] = existing['registrations'];
         updated['checkin_records'] = existing['checkin_records'];
-        updated['id'] = id; // 强制保持 ID
-        
+        updated['id'] = id;
         MOCK_ACTIVITIES[activityIndex] = updated;
         return updated as T;
     }
-    
-    // 如果没找到，至少返回一个符合 ActivityResponse 格式的对象
     return { 
         ...payload, 
         id: id, 
@@ -95,18 +103,34 @@ export const handleMockRequest = async <T>(url: string, method: string, data: an
     } as T;
   }
   
+  // ========================================
+  // 签到相关 API
+  // ========================================
   if (url.includes('/checkin') && method === 'POST') {
     return { message: 'Check-in successful', already_checked: false } as T;
   }
   
-  if (url.includes('/report') && method === 'POST') {
-     return { message: 'Report submitted' } as T;
+  if (url.includes('/checkin') && method === 'DELETE') {
+    return { message: 'Check-in cancelled' } as T;
   }
   
+  // ========================================
+  // 举报相关 API
+  // ========================================
+  if (url.includes('/report') && method === 'POST') {
+    return { message: 'Report submitted' } as T;
+  }
+  
+  // ========================================
+  // 导出相关 API
+  // ========================================
   if (url.includes('/export') && method === 'POST') {
     return { message: 'Export successful' } as T;
   }
   
+  // ========================================
+  // 认证相关 API
+  // ========================================
   if (url === '/auth/login' && method === 'POST') {
     return { token: 'mock-jwt-token', user: MOCK_USER } as T;
   }
@@ -115,8 +139,71 @@ export const handleMockRequest = async <T>(url: string, method: string, data: an
     return { token: 'mock-jwt-token', user: MOCK_USER } as T;
   }
   
+  if (url === '/auth/login/apple' && method === 'POST') {
+    return { token: 'mock-jwt-token', user: MOCK_USER } as T;
+  }
+  
+  if (url === '/auth/sms/send' && method === 'POST') {
+    return { message: 'SMS sent successfully' } as T;
+  }
+  
+  // ========================================
+  // 用户相关 API
+  // ========================================
+  if (url === '/user/me' && method === 'GET') {
+    return MOCK_USER as T;
+  }
+  
+  if (url === '/user/me' && method === 'PUT') {
+    return { ...MOCK_USER, ...data } as T;
+  }
+  
+  if (url === '/user/account' && method === 'DELETE') {
+    return { message: 'Account deletion requested', cooling_until: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString() } as T;
+  }
+  
+  // ========================================
+  // 反馈相关 API
+  // ========================================
   if (url === '/feedback' && method === 'POST') {
     return { message: 'Feedback submitted' } as T;
+  }
+  
+  // ========================================
+  // 埋点相关 API（静默返回成功）
+  // ========================================
+  if (url === '/analytics/events/batch' && method === 'POST') {
+    return { message: 'Events recorded' } as T;
+  }
+  
+  // ========================================
+  // 权益相关 API
+  // ========================================
+  if (url === '/billing/me/entitlements' && method === 'GET') {
+    return { 
+      entitlements: {
+        max_activities: 5,
+        max_participants: 50,
+        export_limit: 1
+      } 
+    } as T;
+  }
+  
+  // ========================================
+  // 客服相关 API
+  // ========================================
+  if (url.includes('/support/entry') && method === 'GET') {
+    return { customer_service_url: 'https://example.com/support' } as T;
+  }
+  
+  // ========================================
+  // 分享相关 API
+  // ========================================
+  if (url.includes('/share') && method === 'GET') {
+    return { 
+      wechat_url_link: 'https://wxaurl.cn/mock',
+      qrcode_url: 'https://example.com/qrcode.png'
+    } as T;
   }
 
   throw new Error(`Mock not implemented for ${method} ${url}`);

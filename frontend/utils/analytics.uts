@@ -1,4 +1,3 @@
-import { config } from './config.uts'
 import { request, RequestOptions } from './request.uts'
 import { getClientPlatform } from '@/adapters/platform.uts'
 
@@ -87,8 +86,9 @@ export const flushEvents = async () => {
    *
    * 鉴权策略：
    * - 上报请求带 X-Skip-Auth-Redirect=1，避免 401 触发登录跳转造成循环。
+   *
+   * 注意：Mock模式由 request.uts 统一拦截，此处无需判断
    */
-  if (config.USE_MOCK) return
   const buf = loadBuffer()
   if (buf.length === 0) return
 

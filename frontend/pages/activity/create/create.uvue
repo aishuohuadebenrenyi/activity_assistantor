@@ -48,28 +48,6 @@
 				</view>
 			</view>
 
-			<view class="theme-card card">
-				<view class="card-header">
-					<text class="card-header-title">选择主题</text>
-					</view>
-				<view class="card-content">
-					<scroll-view class="theme-scroll" scroll-x="true" show-scrollbar="false">
-						<view class="theme-list">
-							<view 
-								v-for="theme in themes" 
-								:key="theme.id" 
-								:class="['theme-item', form.theme === theme.id ? 'active-theme' : '']"
-								@click="form.theme = theme.id"
-								hover-class="hover-opacity"
-							>
-								<text class="theme-icon">{{ theme.icon }}</text>
-								<text :class="['theme-name', form.theme === theme.id ? 'active-theme-text' : '']">{{ theme.name }}</text>
-							</view>
-						</view>
-					</scroll-view>
-				</view>
-			</view>
-
 			<view class="footer-btn-container">
 				<button :class="['btn', isSubmitting ? 'btn-disabled' : 'btn-primary']" :disabled="isSubmitting" @click="submitForm" hover-class="hover-opacity">
 					<text class="btn-text">{{ isSubmitting ? '创建中...' : '立即创建活动' }}</text>
@@ -94,16 +72,8 @@
 					time: '',
 					location: '',
 					capacity: 0,
-					description: '',
-					theme: 'business'
-				},
-				themes: [
-					{ id: 'business', name: '商务', icon: '💼' },
-					{ id: 'party', name: '聚会', icon: '🎉' },
-					{ id: 'sports', name: '运动', icon: '⚽' },
-					{ id: 'study', name: '学习', icon: '📚' },
-					{ id: 'other', name: '其他', icon: '✨' }
-				]
+					description: ''
+				}
 			}
 		},
 		onLoad() {
@@ -125,7 +95,7 @@
 			async submitForm() {
 				if (this.isSubmitting) return;
 				
-				logEvent('activity_create_submit_click', { theme: this.form.theme });
+				logEvent('activity_create_submit_click', {});
 				
 				if (!this.form.name || !this.form.date || !this.form.time) {
 					uni.showToast({ title: '请完善活动信息', icon: 'none' });
@@ -159,7 +129,7 @@
 					host_phone: null,
 					checkinRecords: [],
 					registrations: [],
-					type: this.form.theme,
+					type: '其他',
 					createdAt: new Date().toISOString()
 				} as Activity;
 
@@ -238,46 +208,6 @@
 		padding: 12px;
 		font-size: 16px;
 		width: 100%;
-	}
-
-	.theme-scroll {
-		width: 100%;
-	}
-
-	.theme-list {
-		flex-direction: row;
-		padding: 4px 0;
-	}
-
-	.theme-item {
-		width: 70px;
-		height: 80px;
-		background-color: #F2F2F7;
-		border-radius: 12px;
-		margin-right: 12px;
-		justify-content: center;
-		align-items: center;
-		border: 1px solid transparent;
-	}
-
-	.active-theme {
-		background-color: rgba(0, 122, 255, 0.1);
-		border-color: #007AFF;
-	}
-
-	.theme-icon {
-		font-size: 24px;
-		margin-bottom: 4px;
-	}
-
-	.theme-name {
-		font-size: 12px;
-		color: #8E8E93;
-	}
-
-	.active-theme-text {
-		color: #007AFF;
-		font-weight: 600;
 	}
 
 	.footer-btn-container {
