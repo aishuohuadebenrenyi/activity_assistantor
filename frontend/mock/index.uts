@@ -66,6 +66,10 @@ export const handleMockRequest = async <T>(url: string, method: string, data: an
       start_time: `${payload['date'] ?? ''}T${payload['time'] ?? ''}:00`,
       views_count: 0,
       status: 'upcoming',
+      host_phone: payload['host_phone'] ?? null,
+      host_wechat: payload['host_wechat'] ?? null,
+      show_phone: payload['show_phone'] ?? false,
+      show_wechat: payload['show_wechat'] ?? false,
       checkin_records: [],
       registrations: [],
       created_at: new Date().toISOString()
@@ -90,6 +94,10 @@ export const handleMockRequest = async <T>(url: string, method: string, data: an
         updated['registrations'] = existing['registrations'];
         updated['checkin_records'] = existing['checkin_records'];
         updated['id'] = id;
+        updated['host_phone'] = payload['host_phone'] ?? existing['host_phone'] ?? null;
+        updated['host_wechat'] = payload['host_wechat'] ?? existing['host_wechat'] ?? null;
+        updated['show_phone'] = payload['show_phone'] ?? existing['show_phone'] ?? false;
+        updated['show_wechat'] = payload['show_wechat'] ?? existing['show_wechat'] ?? false;
         MOCK_ACTIVITIES[activityIndex] = updated;
         return updated as T;
     }
@@ -97,6 +105,10 @@ export const handleMockRequest = async <T>(url: string, method: string, data: an
         ...payload, 
         id: id, 
         start_time: `${payload['date'] ?? '2023-01-01'}T${payload['time'] ?? '00:00'}:00`,
+        host_phone: payload['host_phone'] ?? null,
+        host_wechat: payload['host_wechat'] ?? null,
+        show_phone: payload['show_phone'] ?? false,
+        show_wechat: payload['show_wechat'] ?? false,
         registrations: [],
         checkin_records: [],
         message: 'Updated successfully' 

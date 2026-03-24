@@ -160,6 +160,9 @@ type Participant = {
 					views: 0,
 					status: '',
 					host_phone: null,
+					host_wechat: null,
+					show_phone: false,
+					show_wechat: false,
 					checkinRecords: [],
 					registrations: [],
 					createdAt: ''

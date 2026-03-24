@@ -132,6 +132,9 @@ type ActivityResponse = {
   views_count: number;
   created_at: string;
   host_phone: string | null;
+  host_wechat: string | null;
+  show_phone: boolean;
+  show_wechat: boolean;
   registrations: RegistrationResponse[];
   checkin_records: CheckinRecordResponse[];
 }
@@ -197,6 +200,9 @@ function mapBackendToFrontend(data: ActivityResponse): Activity {
     views: data.views_count,
     status: data.status,
     host_phone: data.host_phone ?? null,
+    host_wechat: data.host_wechat ?? null,
+    show_phone: data.show_phone ?? false,
+    show_wechat: data.show_wechat ?? false,
     checkinRecords: checkinRecords,
     registrations: registrations,
     createdAt: data.created_at,
@@ -300,7 +306,11 @@ export const addActivity = async (activity: Activity): Promise<Activity> => {
       time: activity.time,
       location: activity.location,
       description: activity.description,
-      capacity: activity.capacity
+      capacity: activity.capacity,
+      host_phone: activity.host_phone,
+      host_wechat: activity.host_wechat,
+      show_phone: activity.show_phone,
+      show_wechat: activity.show_wechat
     };
     const res = await request<ActivityResponse>(new RequestOptions('/activities', 'POST', payload));
     const realActivity = mapBackendToFrontend(res);
@@ -360,7 +370,11 @@ export const updateActivity = async (activity: Activity): Promise<Activity> => {
       time: activity.time,
       location: activity.location,
       description: activity.description,
-      capacity: activity.capacity
+      capacity: activity.capacity,
+      host_phone: activity.host_phone,
+      host_wechat: activity.host_wechat,
+      show_phone: activity.show_phone,
+      show_wechat: activity.show_wechat
     };
     
     const res = await request<ActivityResponse>(new RequestOptions(`/activities/${activity.id}`, 'PUT', payload));

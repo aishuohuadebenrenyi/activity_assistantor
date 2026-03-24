@@ -96,6 +96,12 @@ class Activity(db.Model):
     # 浏览量统计
     views_count = db.Column(db.Integer, default=0)
     
+    # 主办方联系方式（可选填写）
+    host_phone = db.Column(db.String(20), nullable=True)
+    host_wechat = db.Column(db.String(64), nullable=True)
+    show_phone = db.Column(db.Boolean, default=False)
+    show_wechat = db.Column(db.Boolean, default=False)
+    
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -104,13 +110,15 @@ class Activity(db.Model):
     # 关系：活动的签到记录（级联删除）
     checkin_records = db.relationship('CheckinRecord', backref='activity', lazy='dynamic', cascade='all, delete-orphan')
 
-    def to_dict(self, include_registrations=True, mask_registrations=True):
+    def to_dict(self, include_registrations=True, mask_registrations=True, show_contact=False, is_organizer=False):
         """
         将活动对象转换为可 JSON 序列化的字典。
 
         参数：
         - include_registrations: 是否包含报名与签到明细（列表页通常关闭）
         - mask_registrations: 是否对报名手机号脱敏（非组织者视角应开启）
+        - show_contact: 是否显示主办方联系方式（已报名用户可见）
+        - is_organizer: 是否是活动组织者（组织者可见完整联系方式）
 
         返回：
         - dict: 活动字段快照
@@ -127,14 +135,25 @@ class Activity(db.Model):
             'status': self.status,
             'views_count': self.views_count,
             'created_at': self.created_at.isoformat(),
-            'host_phone': self.organizer.phone if self.organizer else None,
         }
+        
+        if show_contact or is_organizer:
+            if self.show_phone and self.host_phone:
+                res['host_phone'] = self.host_phone if is_organizer else mask_phone(self.host_phone)
+            if self.show_wechat and self.host_wechat:
+                res['host_wechat'] = self.host_wechat if is_organizer else self._mask_wechat(self.host_wechat)
         
         if include_registrations:
             res['registrations'] = [r.to_dict(mask=mask_registrations) for r in self.registrations]
             res['checkin_records'] = [c.to_dict() for c in self.checkin_records]
             
         return res
+    
+    def _mask_wechat(self, wechat):
+        """微信号脱敏处理，如 wechat_id -> wch****id"""
+        if not wechat or len(wechat) < 4:
+            return wechat
+        return f"{wechat[:2]}****{wechat[-2:]}"
 
 class Registration(db.Model):
     """

@@ -48,6 +48,45 @@
 				</view>
 			</view>
 
+			<view class="form-card card">
+				<view class="card-header">
+					<text class="card-header-title">联系方式（选填）</text>
+					<text class="card-header-subtitle">仅对已报名用户可见</text>
+				</view>
+				<view class="card-content">
+					<view class="form-group">
+						<view class="label-row">
+							<text class="label">手机号码</text>
+							<view class="switch-row" @click="toggleShowPhone">
+								<text class="switch-label">公开</text>
+								<view :class="['switch-box', form.show_phone ? 'switch-on' : 'switch-off']">
+									<view :class="['switch-dot', form.show_phone ? 'dot-on' : 'dot-off']"></view>
+								</view>
+							</view>
+						</view>
+						<input class="form-input" v-model="form.host_phone" placeholder="请输入手机号码" type="number" />
+					</view>
+
+					<view class="form-group">
+						<view class="label-row">
+							<text class="label">微信号</text>
+							<view class="switch-row" @click="toggleShowWechat">
+								<text class="switch-label">公开</text>
+								<view :class="['switch-box', form.show_wechat ? 'switch-on' : 'switch-off']">
+									<view :class="['switch-dot', form.show_wechat ? 'dot-on' : 'dot-off']"></view>
+								</view>
+							</view>
+						</view>
+						<input class="form-input" v-model="form.host_wechat" placeholder="请输入微信号" />
+					</view>
+
+					<view class="contact-tip">
+						<text class="tip-icon">💡</text>
+						<text class="tip-text">联系方式将展示给已报名用户，方便活动沟通</text>
+					</view>
+				</view>
+			</view>
+
 			<view class="footer-btn-container">
 				<button :class="['btn', isSubmitting ? 'btn-disabled' : 'btn-primary']" :disabled="isSubmitting" @click="submitForm" hover-class="hover-opacity">
 					<text class="btn-text">{{ isSubmitting ? '创建中...' : '立即创建活动' }}</text>
@@ -72,7 +111,11 @@
 					time: '',
 					location: '',
 					capacity: 0,
-					description: ''
+					description: '',
+					host_phone: '',
+					host_wechat: '',
+					show_phone: false,
+					show_wechat: false
 				}
 			}
 		},
@@ -92,6 +135,20 @@
 			onTimeChange(e) {
 				this.form.time = e.detail.value;
 			},
+			toggleShowPhone() {
+				if (this.form.host_phone && this.form.host_phone.length > 0) {
+					this.form.show_phone = !this.form.show_phone;
+				} else {
+					uni.showToast({ title: '请先填写手机号码', icon: 'none' });
+				}
+			},
+			toggleShowWechat() {
+				if (this.form.host_wechat && this.form.host_wechat.length > 0) {
+					this.form.show_wechat = !this.form.show_wechat;
+				} else {
+					uni.showToast({ title: '请先填写微信号', icon: 'none' });
+				}
+			},
 			async submitForm() {
 				if (this.isSubmitting) return;
 				
@@ -103,7 +160,6 @@
 					return;
 				}
 
-				// 校验活动时间是否早于当前时间
 				const now = new Date();
 				const selectedDateTime = new Date(`${this.form.date}T${this.form.time}`);
 				if (selectedDateTime <= now) {
@@ -126,7 +182,10 @@
 					capacity: this.form.capacity,
 					description: this.form.description,
 					views: 0,
-					host_phone: null,
+					host_phone: this.form.host_phone || null,
+					host_wechat: this.form.host_wechat || null,
+					show_phone: this.form.show_phone,
+					show_wechat: this.form.show_wechat,
 					checkinRecords: [],
 					registrations: [],
 					type: '其他',
@@ -238,5 +297,79 @@
 		color: #FFFFFF;
 		font-size: 17px;
 		font-weight: 600;
+	}
+
+	.card-header-subtitle {
+		font-size: 12px;
+		color: #8E8E93;
+		margin-left: 8px;
+	}
+
+	.label-row {
+		flex-direction: row;
+		justify-content: space-between;
+		align-items: center;
+		margin-bottom: 8px;
+	}
+
+	.switch-row {
+		flex-direction: row;
+		align-items: center;
+	}
+
+	.switch-label {
+		font-size: 13px;
+		color: #8E8E93;
+		margin-right: 6px;
+	}
+
+	.switch-box {
+		width: 40px;
+		height: 24px;
+		border-radius: 12px;
+		padding: 2px;
+	}
+
+	.switch-on {
+		background-color: #34C759;
+	}
+
+	.switch-off {
+		background-color: #E5E5EA;
+	}
+
+	.switch-dot {
+		width: 20px;
+		height: 20px;
+		border-radius: 10px;
+		background-color: #FFFFFF;
+	}
+
+	.dot-on {
+		align-self: flex-end;
+	}
+
+	.dot-off {
+		align-self: flex-start;
+	}
+
+	.contact-tip {
+		flex-direction: row;
+		align-items: center;
+		background-color: #FFF9E6;
+		border-radius: 8px;
+		padding: 12px;
+		margin-top: 8px;
+	}
+
+	.tip-icon {
+		font-size: 14px;
+		margin-right: 8px;
+	}
+
+	.tip-text {
+		font-size: 13px;
+		color: #8E8E93;
+		flex: 1;
 	}
 </style>

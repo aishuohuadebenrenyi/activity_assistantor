@@ -112,11 +112,15 @@ def create_activity():
             start_time=datetime.fromisoformat(data['date'] + 'T' + data['time']),
             location=data.get('location'),
             description=data.get('description'),
-            capacity=int(data.get('capacity', 0))
+            capacity=int(data.get('capacity', 0)),
+            host_phone=data.get('host_phone'),
+            host_wechat=data.get('host_wechat'),
+            show_phone=data.get('show_phone', False),
+            show_wechat=data.get('show_wechat', False)
         )
         db.session.add(new_activity)
         db.session.commit()
-        return jsonify(new_activity.to_dict()), 201
+        return jsonify(new_activity.to_dict(is_organizer=True)), 201
     except Exception as e:
         return jsonify({'error': str(e)}), 400
 
@@ -128,6 +132,7 @@ def get_activity(id):
     业务规则（敏感信息保护）：
     - 若请求方是该活动组织者，则返回报名手机号明文；
     - 否则返回脱敏手机号（mask_registrations=True）。
+    - 联系方式仅对已报名用户和组织者可见。
 
     判断方式：
     - 若请求携带 Authorization，则尝试解析 JWT；
@@ -135,22 +140,38 @@ def get_activity(id):
     """
     activity = Activity.query.get_or_404(id)
     
-    # 尝试获取当前用户以判断是否是组织者
     auth_header = request.headers.get('Authorization')
     is_organizer = False
+    is_registered = False
+    user_id = None
+    
     if auth_header:
         try:
             from flask import current_app
             import jwt
             token = auth_header.split(" ")[1]
             payload = jwt.decode(token, current_app.config['SECRET_KEY'], algorithms=['HS256'])
-            if payload['user_id'] == activity.user_id:
+            user_id = payload['user_id']
+            if user_id == activity.user_id:
                 is_organizer = True
         except:
             pass
+    
+    if user_id and not is_organizer:
+        user = User.query.get(user_id)
+        if user and user.phone:
+            registration = Registration.query.filter_by(
+                activity_id=id, 
+                phone=user.phone
+            ).first()
+            if registration:
+                is_registered = True
             
-    # 如果不是组织者，脱敏显示报名人员手机号
-    return jsonify(activity.to_dict(mask_registrations=not is_organizer))
+    return jsonify(activity.to_dict(
+        mask_registrations=not is_organizer,
+        show_contact=is_registered,
+        is_organizer=is_organizer
+    ))
 
 @activity_bp.route('/<int:id>', methods=['PUT'])
 @auth_required
@@ -162,6 +183,7 @@ def update_activity(id):
     Body（JSON）：支持部分字段更新：
     - name/location/description/type/capacity
     - date/time 同时提供时更新 start_time
+    - host_phone/host_wechat/show_phone/show_wechat 联系方式相关
 
     业务规则：
     - name/description 更新会触发微信内容安全校验；
@@ -169,7 +191,6 @@ def update_activity(id):
     """
     activity = Activity.query.get_or_404(id)
     
-    # Permission Check
     if activity.user_id != request.user.id:
         return jsonify({'error': '没有权限修改此活动'}), 403
         
@@ -190,7 +211,11 @@ def update_activity(id):
     if 'type' in data: activity.type = data['type']
     if 'capacity' in data: activity.capacity = int(data['capacity'])
     
-    # Handle date/time update
+    if 'host_phone' in data: activity.host_phone = data['host_phone'] or None
+    if 'host_wechat' in data: activity.host_wechat = data['host_wechat'] or None
+    if 'show_phone' in data: activity.show_phone = bool(data['show_phone'])
+    if 'show_wechat' in data: activity.show_wechat = bool(data['show_wechat'])
+    
     if 'date' in data and 'time' in data:
         try:
             activity.start_time = datetime.fromisoformat(data['date'] + 'T' + data['time'])
@@ -198,7 +223,7 @@ def update_activity(id):
             return jsonify({'error': '日期格式错误'}), 400
             
     db.session.commit()
-    return jsonify(activity.to_dict())
+    return jsonify(activity.to_dict(is_organizer=True))
 
 @activity_bp.route('/<int:id>/share', methods=['GET'])
 def share_activity(id):
@@ -233,7 +258,7 @@ def share_activity(id):
 @auth_required
 def get_my_ticket(id):
     """
-    获取“我的票据”（需要登录）。
+    获取"我的票据"（需要登录）。
 
     当前实现限制：
     - Registration 暂未强制绑定 user_id，因此通过 `user.phone` 匹配报名记录；
@@ -242,19 +267,16 @@ def get_my_ticket(id):
     返回：
     - registration: 报名信息
     - ticket_code: Base64 编码的签到码（格式 CHECKIN:<activity_id>:<registration_id>:<timestamp>）
-    - activity: 活动信息
+    - activity: 活动信息（包含主办方联系方式）
     """
     user = request.user
     activity = Activity.query.get_or_404(id)
     
-    # Find registration by phone (since Registration model is simple)
-    # In a real app, Registration would have a user_id.
     registration = Registration.query.filter_by(activity_id=id, phone=user.phone).first()
     
     if not registration:
         return jsonify({'error': '您尚未报名此活动'}), 404
 
-    # Generate check-in code
     import base64
     import time
     
@@ -264,7 +286,7 @@ def get_my_ticket(id):
     return jsonify({
         'registration': registration.to_dict(),
         'ticket_code': b64_code,
-        'activity': activity.to_dict()
+        'activity': activity.to_dict(show_contact=True, is_organizer=False)
     })
 
 @activity_bp.route('/<int:id>/checkin', methods=['POST'])

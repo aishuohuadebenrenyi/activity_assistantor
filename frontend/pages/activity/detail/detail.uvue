@@ -67,6 +67,23 @@
 					<text class="info-icon">📍</text>
 					<text class="info-text">{{ activity.location || '地点待定' }}</text>
 				</view>
+				
+				<!-- #ifdef MP-WEIXIN -->
+				<!-- 主办方联系方式（仅小程序端已报名用户可见） -->
+				<view v-if="hasContactInfo" class="contact-section">
+					<text class="contact-title">主办方联系方式</text>
+					<view v-if="activity.host_phone && activity.show_phone" class="contact-item" @click="callHost">
+						<text class="contact-icon">📞</text>
+						<text class="contact-value">{{ activity.host_phone }}</text>
+						<text class="contact-action">拨打</text>
+					</view>
+					<view v-if="activity.host_wechat && activity.show_wechat" class="contact-item" @click="copyWechat">
+						<text class="contact-icon">💬</text>
+						<text class="contact-value">{{ activity.host_wechat }}</text>
+						<text class="contact-action">复制</text>
+					</view>
+				</view>
+				<!-- #endif -->
 			</view>
 
 			<!-- 展开的详情表单 -->
@@ -226,6 +243,9 @@
 					views: 0,
 					status: '',
 					host_phone: null,
+					host_wechat: null,
+					show_phone: false,
+					show_wechat: false,
 					checkinRecords: [],
 					registrations: [],
 					createdAt: ''
@@ -242,6 +262,10 @@
 			checkinRate() {
 				if (!this.activity.participants) return 0;
 				return Math.round((this.activity.checkins / this.activity.participants) * 100);
+			},
+			hasContactInfo(): boolean {
+				return (this.activity.host_phone != null && this.activity.show_phone) || 
+					   (this.activity.host_wechat != null && this.activity.show_wechat);
 			}
 		},
 		methods: {
@@ -425,7 +449,30 @@
 						}
 					}
 				});
+			},
+			// #ifdef MP-WEIXIN
+			callHost() {
+				if (this.activity.host_phone) {
+					uni.makePhoneCall({
+						phoneNumber: this.activity.host_phone,
+						fail: (err) => {
+							console.error('Make phone call failed', err);
+							uni.showToast({ title: '拨号失败', icon: 'none' });
+						}
+					});
+				}
+			},
+			copyWechat() {
+				if (this.activity.host_wechat) {
+					uni.setClipboardData({
+						data: this.activity.host_wechat,
+						success: () => {
+							uni.showToast({ title: '微信号已复制', icon: 'success' });
+						}
+					});
+				}
 			}
+			// #endif
 		}
 	}
 </script>
@@ -587,6 +634,43 @@
 	.info-location {
 		flex-direction: row;
 		align-items: center;
+	}
+
+	.contact-section {
+		margin-top: 16px;
+		padding-top: 16px;
+		border-top: 1px solid #E5E5EA;
+	}
+
+	.contact-title {
+		font-size: 13px;
+		color: #8E8E93;
+		margin-bottom: 10px;
+	}
+
+	.contact-item {
+		flex-direction: row;
+		align-items: center;
+		padding: 10px 0;
+	}
+
+	.contact-icon {
+		font-size: 16px;
+		margin-right: 8px;
+	}
+
+	.contact-value {
+		flex: 1;
+		font-size: 15px;
+		color: #000000;
+	}
+
+	.contact-action {
+		font-size: 13px;
+		color: #007AFF;
+		padding: 4px 12px;
+		background-color: rgba(0, 122, 255, 0.1);
+		border-radius: 12px;
 	}
 
 	.detail-form-section {
