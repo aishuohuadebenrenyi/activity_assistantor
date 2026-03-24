@@ -1,3 +1,31 @@
+/**
+ * 调试模式配置类型
+ */
+export type DebugConfig = {
+  /**
+   * 是否启用调试模式
+   * - true：启用调试日志、开发工具等
+   * - false：生产环境
+   */
+  ENABLED: boolean;
+  /**
+   * 是否启用全局 Mock 数据
+   * - true：所有请求走 mock/index.uts，不访问后端
+   * - false：走真实后端 API
+   * 
+   * 使用场景：
+   * - 前端独立开发调试：true（无需启动后端）
+   * - 前后端联调：false
+   * - 演示/Demo：true
+   */
+  USE_MOCK: boolean;
+  /**
+   * 启动时是否清空缓存
+   * - 用于模拟"首次启动/首次登录"流程
+   */
+  CLEAR_CACHE_ON_START: boolean;
+}
+
 export type Config = {
   /**
    * 后端 API 基地址（需包含 /api 前缀）。
@@ -17,30 +45,7 @@ export type Config = {
   /**
    * 调试模式配置
    */
-  DEBUG: {
-    /**
-     * 是否启用调试模式
-     * - true：启用调试日志、开发工具等
-     * - false：生产环境
-     */
-    ENABLED: boolean;
-    /**
-     * 是否启用全局 Mock 数据
-     * - true：所有请求走 mock/index.uts，不访问后端
-     * - false：走真实后端 API
-     * 
-     * 使用场景：
-     * - 前端独立开发调试：true（无需启动后端）
-     * - 前后端联调：false
-     * - 演示/Demo：true
-     */
-    USE_MOCK: boolean;
-    /**
-     * 启动时是否清空缓存
-     * - 用于模拟"首次启动/首次登录"流程
-     */
-    CLEAR_CACHE_ON_START: boolean;
-  };
+  DEBUG: DebugConfig;
   /**
    * 隐私政策与用户协议的访问地址（合规要求）。
    * 通常由后端提供静态页面或由官网承载。
