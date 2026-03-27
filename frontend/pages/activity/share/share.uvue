@@ -99,6 +99,7 @@
 					type: '',
 					date: '',
 					time: '',
+					endTime: null,
 					location: '',
 					description: '',
 					capacity: 0,

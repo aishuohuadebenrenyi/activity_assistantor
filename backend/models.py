@@ -85,13 +85,15 @@ class Activity(db.Model):
     type = db.Column(db.String(50))
     # 开始时间
     start_time = db.Column(db.DateTime, nullable=False)
+    # 结束时间（可选，默认为开始时间后24小时）
+    end_time = db.Column(db.DateTime, nullable=True)
     # 地点
     location = db.Column(db.String(255))
     # 详细描述
     description = db.Column(db.Text)
     # 人数限制，0 表示不限制
     capacity = db.Column(db.Integer, default=0) 
-    # 状态：upcoming(即将开始), ongoing(进行中), ended(已结束)
+    # 状态：upcoming(即将开始), ongoing(进行中), ended(已结束), cancelled(已取消)
     status = db.Column(db.String(20), default='upcoming') 
     # 浏览量统计
     views_count = db.Column(db.Integer, default=0)
@@ -115,22 +117,28 @@ class Activity(db.Model):
         根据当前时间动态计算活动状态。
 
         状态规则：
+        - cancelled: 已取消（手动设置，优先级最高）
         - upcoming: 活动未开始（start_time > 当前时间）
-        - ongoing: 活动进行中（start_time <= 当前时间 < start_time + 24小时）
-        - ended: 活动已结束（当前时间 >= start_time + 24小时）
+        - ongoing: 活动进行中（start_time <= 当前时间 < end_time）
+        - ended: 活动已结束（当前时间 >= end_time）
 
         返回：
         - str: 计算后的状态
         """
         from datetime import datetime, timedelta
         
+        # 如果已取消，直接返回
+        if self.status == 'cancelled':
+            return 'cancelled'
+        
         now = datetime.utcnow()
         
         if self.start_time > now:
             return 'upcoming'
         
-        end_time = self.start_time + timedelta(hours=24)
-        if now < end_time:
+        # 使用 end_time 或默认24小时
+        effective_end_time = self.end_time if self.end_time else self.start_time + timedelta(hours=24)
+        if now < effective_end_time:
             return 'ongoing'
         
         return 'ended'
@@ -156,6 +164,7 @@ class Activity(db.Model):
             'name': self.name,
             'type': self.type,
             'start_time': self.start_time.isoformat(),
+            'end_time': self.end_time.isoformat() if self.end_time else None,
             'location': self.location,
             'description': self.description,
             'capacity': self.capacity,
@@ -192,8 +201,10 @@ class Registration(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     # 外键：关联活动
     activity_id = db.Column(db.Integer, db.ForeignKey('activities.id'), nullable=False)
+    # 外键：关联用户（可选，支持代报名场景）
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True, index=True)
     
-    # 报名人姓名（简化版，暂不强制关联 User 表，方便未注册用户报名）
+    # 报名人姓名
     name = db.Column(db.String(64), nullable=False)
     # 报名人电话
     phone = db.Column(db.String(20), nullable=False)
@@ -216,6 +227,7 @@ class Registration(db.Model):
         return {
             'id': self.id,
             'activity_id': self.activity_id,
+            'user_id': self.user_id,
             'name': self.name,
             'phone': mask_phone(self.phone) if mask else self.phone,
             'created_at': self.created_at.isoformat(),

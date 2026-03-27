@@ -30,16 +30,56 @@ activity_bp = Blueprint('activity', __name__)
 @activity_bp.route('/', methods=['GET'])
 def get_activities():
     """
-    获取活动列表（支持分页）。
-
-    Query 参数：
-    - status: 可选，all/ongoing/upcoming/ended，不传则返回全部；
-    - search: 可选，按活动名称或地点模糊搜索；
-    - page: 可选，页码，默认1；
-    - page_size: 可选，每页数量，默认20，最大100。
-
-    返回：
-    - 200: {activities: 活动数组, total: 总数, page: 当前页, page_size: 每页数量, has_more: 是否有更多}
+    获取活动列表（支持分页）
+    ---
+    tags:
+      - 活动
+    summary: 获取活动列表
+    description: 支持按状态筛选、关键词搜索和分页
+    parameters:
+      - name: status
+        in: query
+        type: string
+        enum: [all, ongoing, upcoming, ended]
+        default: all
+        description: 活动状态筛选
+      - name: search
+        in: query
+        type: string
+        description: 按活动名称或地点模糊搜索
+      - name: page
+        in: query
+        type: integer
+        default: 1
+        description: 页码
+      - name: page_size
+        in: query
+        type: integer
+        default: 20
+        maximum: 100
+        description: 每页数量
+    responses:
+      200:
+        description: 成功获取活动列表
+        schema:
+          type: object
+          properties:
+            activities:
+              type: array
+              items:
+                $ref: '#/components/schemas/Activity'
+            total:
+              type: integer
+              description: 总数
+            page:
+              type: integer
+              description: 当前页
+            page_size:
+              type: integer
+              description: 每页数量
+            has_more:
+              type: boolean
+              description: 是否有更多
     """
     logger.info("[ACTIVITY] 获取活动列表请求")
     
@@ -82,34 +122,127 @@ def get_activities():
 @idempotent
 def create_activity():
     """
-    创建活动（需要登录）。
-
-    Body（JSON）：
-    - name: 活动名称（必填）
-    - type: 活动类型（可选）
-    - date/time: 开始日期与时间（必填，ISO 片段，组合成 datetime）
-    - location/description/capacity: 可选字段
-
-    业务规则：
-    - 创建前会对 name+description 做微信内容安全校验，命中违规则拒绝创建。
-
-    返回：
-    - 201: 创建成功，返回 Activity 结构；
-    - 400: 参数错误/内容违规/其它创建失败原因。
+    创建活动
+    ---
+    tags:
+      - 活动
+    summary: 创建新活动
+    description: |
+      创建活动需要登录。
+      创建前会对活动名称、描述、地点进行微信内容安全校验。
+    security:
+      - Bearer: []
+    parameters:
+      - name: body
+        in: body
+        required: true
+        schema:
+          type: object
+          required:
+            - name
+            - date
+            - time
+          properties:
+            name:
+              type: string
+              description: 活动名称
+              example: 2024年度技术分享会
+            type:
+              type: string
+              description: 活动类型
+              default: 其他
+              example: business
+            date:
+              type: string
+              format: date
+              description: 活动日期
+              example: "2024-03-25"
+            time:
+              type: string
+              description: 活动时间
+              example: "14:00"
+            end_date:
+              type: string
+              format: date
+              description: 结束日期
+              example: "2024-03-25"
+            end_time:
+              type: string
+              description: 结束时间
+              example: "16:00"
+            location:
+              type: string
+              description: 活动地点
+              example: 北京市朝阳区xxx大厦
+            description:
+              type: string
+              description: 活动介绍
+              example: 本次分享会将探讨最新技术趋势
+            capacity:
+              type: integer
+              description: 人数限制，0表示不限
+              default: 0
+              example: 100
+            host_phone:
+              type: string
+              description: 主办方电话
+              example: "13800138000"
+            host_wechat:
+              type: string
+              description: 主办方微信
+              example: wechat_id
+            show_phone:
+              type: boolean
+              description: 是否公开电话
+              default: false
+            show_wechat:
+              type: boolean
+              description: 是否公开微信
+              default: false
+    responses:
+      201:
+        description: 创建成功
+        schema:
+          $ref: '#/components/schemas/Activity'
+      400:
+        description: 参数错误或内容违规
+        schema:
+          $ref: '#/components/schemas/ErrorResponse'
+      401:
+        $ref: '#/components/responses/UnauthorizedError'
     """
     data = request.get_json()
     user = request.user
     
-    # 微信内容安全校验
-    if not WeChatService.check_content_security(data['name'] + " " + data.get('description', '')):
+    # 微信内容安全校验 - 扩展校验范围
+    content_to_check = data['name']
+    if data.get('description'):
+        content_to_check += " " + data['description']
+    if data.get('location'):
+        content_to_check += " " + data['location']
+    if data.get('host_wechat'):
+        content_to_check += " " + data['host_wechat']
+    
+    if not WeChatService.check_content_security(content_to_check):
         return jsonify({'error': '内容包含违规信息'}), 400
     
     try:
+        start_time = datetime.fromisoformat(data['date'] + 'T' + data['time'])
+        
+        # 处理结束时间
+        end_time = None
+        if data.get('end_date') and data.get('end_time'):
+            end_time = datetime.fromisoformat(data['end_date'] + 'T' + data['end_time'])
+        elif data.get('duration_hours'):
+            from datetime import timedelta
+            end_time = start_time + timedelta(hours=int(data['duration_hours']))
+        
         new_activity = Activity(
             user_id=user.id,
             name=data['name'],
             type=data.get('type', '其他'),
-            start_time=datetime.fromisoformat(data['date'] + 'T' + data['time']),
+            start_time=start_time,
+            end_time=end_time,
             location=data.get('location'),
             description=data.get('description'),
             capacity=int(data.get('capacity', 0)),
@@ -187,10 +320,11 @@ def update_activity(id):
     Body（JSON）：支持部分字段更新：
     - name/location/description/type/capacity
     - date/time 同时提供时更新 start_time
+    - end_date/end_time 或 duration_hours 更新 end_time
     - host_phone/host_wechat/show_phone/show_wechat 联系方式相关
 
     业务规则：
-    - name/description 更新会触发微信内容安全校验；
+    - name/description/location/host_wechat 更新会触发微信内容安全校验；
     - 非组织者返回 403。
     """
     activity = Activity.query.get_or_404(id)
@@ -200,16 +334,28 @@ def update_activity(id):
         
     data = request.get_json()
     
+    # 收集需要校验的内容
+    content_to_check = ""
+    if 'name' in data:
+        content_to_check += data['name'] + " "
+    if 'description' in data:
+        content_to_check += data['description'] + " "
+    if 'location' in data:
+        content_to_check += data['location'] + " "
+    if 'host_wechat' in data:
+        content_to_check += data['host_wechat'] + " "
+    
+    # 统一进行内容安全校验
+    if content_to_check.strip():
+        if not WeChatService.check_content_security(content_to_check):
+            return jsonify({'error': '内容包含违规信息'}), 400
+    
     if 'name' in data: 
-        if not WeChatService.check_content_security(data['name']):
-            return jsonify({'error': '活动名称包含违规信息'}), 400
         activity.name = data['name']
         
     if 'location' in data: activity.location = data['location']
     
     if 'description' in data: 
-        if not WeChatService.check_content_security(data['description']):
-            return jsonify({'error': '活动描述包含违规信息'}), 400
         activity.description = data['description']
         
     if 'type' in data: activity.type = data['type']
@@ -225,6 +371,16 @@ def update_activity(id):
             activity.start_time = datetime.fromisoformat(data['date'] + 'T' + data['time'])
         except ValueError:
             return jsonify({'error': '日期格式错误'}), 400
+    
+    # 更新结束时间
+    if 'end_date' in data and 'end_time' in data:
+        try:
+            activity.end_time = datetime.fromisoformat(data['end_date'] + 'T' + data['end_time'])
+        except ValueError:
+            return jsonify({'error': '结束日期格式错误'}), 400
+    elif 'duration_hours' in data:
+        from datetime import timedelta
+        activity.end_time = activity.start_time + timedelta(hours=int(data['duration_hours']))
             
     db.session.commit()
     return jsonify(activity.to_dict(is_organizer=True))
@@ -264,13 +420,14 @@ def get_my_ticket(id):
     """
     获取"我的票据"（需要登录）。
 
-    当前实现限制：
-    - Registration 暂未强制绑定 user_id，因此通过 `user.phone` 匹配报名记录；
+    业务规则：
+    - 优先通过 user_id 匹配报名记录；
+    - 若 user_id 未匹配，则通过 phone 匹配（兼容旧数据）；
     - 若用户未报名则返回 404。
 
     返回：
     - registration: 报名信息
-    - ticket_code: Base64 编码的签到码（格式 CHECKIN:<activity_id>:<registration_id>:<timestamp>）
+    - ticket_code: Base64 编码的签到码（格式 CHECKIN:<activity_id>:<registration_id>:<timestamp>:<signature>）
     - qr_code_image: Base64 编码的二维码图片（PNG格式）
     - activity: 活动信息（包含主办方联系方式）
     """
@@ -279,7 +436,12 @@ def get_my_ticket(id):
     user = request.user
     activity = Activity.query.get_or_404(id)
     
-    registration = Registration.query.filter_by(activity_id=id, phone=user.phone).first()
+    # 优先通过 user_id 查找报名记录
+    registration = Registration.query.filter_by(activity_id=id, user_id=user.id).first()
+    
+    # 兼容旧数据：通过 phone 匹配
+    if not registration and user.phone:
+        registration = Registration.query.filter_by(activity_id=id, phone=user.phone).first()
     
     if not registration:
         return jsonify({'error': '您尚未报名此活动'}), 404
@@ -311,7 +473,8 @@ def checkin_user(id):
     - 200: 签到成功/已签到提示；
     - 400/404/403: 参数缺失/无权限/记录不存在等。
     """
-    # Only organizer can checkin others
+    from ..services.qrcode_service import verify_signature
+    
     activity = Activity.query.get_or_404(id)
     if activity.user_id != request.user.id:
         return jsonify({'error': '只有活动组织者可以进行签到操作'}), 403
@@ -330,14 +493,21 @@ def checkin_user(id):
             decoded = base64.b64decode(qr_data).decode('utf-8')
             parts = decoded.split(':')
             
-            if len(parts) != 4 or parts[0] != 'CHECKIN':
+            if len(parts) < 4 or parts[0] != 'CHECKIN':
                  return jsonify({'error': '无效的二维码'}), 400
-                 
+            
             aid = int(parts[1])
             rid = int(parts[2])
+            timestamp = int(parts[3])
             
             if aid != id:
                 return jsonify({'error': '非本活动的签到码'}), 400
+            
+            if len(parts) >= 5:
+                signature = parts[4]
+                valid, error_msg = verify_signature(aid, rid, timestamp, signature)
+                if not valid:
+                    return jsonify({'error': error_msg}), 400
         else:
             rid = registration_id
 
@@ -346,7 +516,7 @@ def checkin_user(id):
             return jsonify({'error': '报名记录不存在'}), 404
             
         if registration.checkin_record:
-            return jsonify({'message': '该用户已签到', 'user': registration.name, 'already_checked': True})
+            return jsonify({'message': '该用户已签到', 'user': registration.name, 'already_checked': True, 'registration_id': registration.id})
             
         new_record = CheckinRecord(
             registration_id=rid,
@@ -356,7 +526,7 @@ def checkin_user(id):
         db.session.add(new_record)
         db.session.commit()
         
-        return jsonify({'message': '签到成功', 'user': registration.name, 'already_checked': False})
+        return jsonify({'message': '签到成功', 'user': registration.name, 'already_checked': False, 'registration_id': registration.id})
         
     except Exception as e:
         return jsonify({'error': f'签到失败: {str(e)}'}), 400

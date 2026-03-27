@@ -11,6 +11,15 @@
 					</view>
 				</view>
 			</view>
+			<view v-else-if="!isOrganizer" class="invalid-state card">
+				<view class="card-content invalid-content">
+					<text class="invalid-title">无访问权限</text>
+					<text class="invalid-desc">只有活动主办方才能查看报名情况</text>
+					<view class="invalid-btn" @click="goBack" hover-class="hover-opacity">
+						<text class="invalid-btn-text">返回</text>
+					</view>
+				</view>
+			</view>
 			<view v-else>
 			<!-- 统计概览 -->
 			<view class="stats-card card">
@@ -109,9 +118,10 @@
 </template>
 
 <script>
-	import { activitiesState, updateActivity, Activity, Registration, CheckinRecord } from '@/store/index.uts'
+	import { activitiesState, updateActivity, Activity, Registration, CheckinRecord, mapBackendToFrontend } from '@/store/index.uts'
 import { request, RequestOptions } from '@/utils/request.uts'
 import { logEvent } from '@/utils/analytics.uts'
+import { ActivityResponse } from '@/utils/api_types.uts'
 
 type Participant = {
 		id: number,
@@ -139,6 +149,10 @@ type Participant = {
 			if (id != null) {
 				this.activityId = parseInt(id as string);
 			}
+			const tab = options['tab'];
+			if (tab === 'checkin') {
+				this.currentFilter = 'unchecked';
+			}
 		},
 		computed: {
 			activity(): Activity {
@@ -153,6 +167,7 @@ type Participant = {
 					type: '',
 					date: '',
 					time: '',
+					endTime: null,
 					location: '',
 					description: '',
 					capacity: 0,
@@ -171,6 +186,11 @@ type Participant = {
 			},
 			isActivityValid(): boolean {
 				return this.activity.id !== 0;
+			},
+			isOrganizer(): boolean {
+				const user = activitiesState.user;
+				if (user == null) return false;
+				return this.activity.organizer_id === user.id;
 			},
 			totalCount(): number {
 				return this.activity.participants || 0;
@@ -303,6 +323,7 @@ type Participant = {
 						message: string
 						user: string
 						already_checked: boolean
+						registration_id: number | null
 					}
 					const res = await request<CheckinResponse>(
 						new RequestOptions(`/activities/${this.activityId}/checkin`, 'POST', { qr_data: qrData })
@@ -314,15 +335,8 @@ type Participant = {
 						uni.showToast({ title: `用户 ${res.user} 已经签到过了`, icon: 'none' });
 					} else {
 						uni.showToast({ title: `用户 ${res.user} 签到成功`, icon: 'success' });
-						// 更新本地状态
-						// 由于后端只返回了成功消息，我们需要手动更新本地数据以反映变化
-						// 解析 qrData 获取 registration_id (CHECKIN:aid:rid:ts)
-						const parts = qrData.split(':');
-						if (parts.length >= 3) {
-							const ridStr = parts[2];
-							const rid = parseInt(ridStr);
-							await this.updateLocalCheckinStatus(rid);
-						}
+						// 从服务器重新获取最新数据，确保数据一致性
+						await this.refreshActivityData();
 					}
 				} catch (e) {
 					uni.hideLoading();
@@ -330,34 +344,25 @@ type Participant = {
 					console.error(e);
 				}
 			},
-			async updateLocalCheckinStatus(registrationId: number) {
-				const currentActivity = this.activity;
-				// 找到对应的 Registration
-				const reg = currentActivity.registrations.find((r: Registration): boolean => r.id === registrationId);
-				if (reg != null && !reg.checkedIn) {
-					reg.checkedIn = true;
-					
-					// 添加到 checkinRecords
-					const now = new Date();
-					const timeStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
-					currentActivity.checkinRecords.push({
-						id: Date.now(),
-						registrationId: registrationId,
-						name: reg.name,
-						phone: reg.phone,
-						time: timeStr
-					} as CheckinRecord);
-					
-					// 更新统计
-					currentActivity.checkins = currentActivity.checkinRecords.length;
-					
-					// 提交更新到 Store
-					try {
-						await updateActivity(currentActivity);
-					} catch (e) {
-						console.error('Failed to sync checkin status to store', e);
+			async refreshActivityData() {
+				try {
+					const res = await request<ActivityResponse>(
+						new RequestOptions(`/activities/${this.activityId}`, 'GET')
+					);
+					const updatedActivity = mapBackendToFrontend(res);
+					// 更新 store 中的活动数据
+					const index = activitiesState.activities.findIndex((a: Activity): boolean => a.id === this.activityId);
+					if (index > -1) {
+						activitiesState.activities[index] = updatedActivity;
 					}
+				} catch (e) {
+					console.error('Failed to refresh activity data', e);
 				}
+			},
+			async updateLocalCheckinStatus(registrationId: number) {
+				// 此方法已废弃，改用 refreshActivityData 确保数据一致性
+				// 保留方法签名以兼容旧代码
+				await this.refreshActivityData();
 			},
 			getAvatarColor(name) {
 				const colors = ['#007AFF', '#5856D6', '#34C759', '#FF9500', '#FF3B30', '#AF52DE'];
@@ -386,7 +391,7 @@ type Participant = {
 						uni.hideLoading();
 					} else {
 						await request(new RequestOptions(`/activities/${this.activityId}/checkin`, 'POST', { registration_id: participant.id }));
-						await this.updateLocalCheckinStatus(participant.id);
+						await this.refreshActivityData();
 						uni.hideLoading();
 						uni.showToast({ title: '签到成功', icon: 'success' });
 					}
@@ -399,17 +404,7 @@ type Participant = {
 				uni.showLoading({ title: '取消签到中...' });
 				try {
 					await request(new RequestOptions(`/activities/${this.activityId}/checkin/${participant.id}`, 'DELETE'));
-					
-					const currentActivity = activitiesState.activities.find((a: Activity): boolean => a.id === this.activityId);
-					if (currentActivity != null) {
-						const updatedRecords = currentActivity.checkinRecords.filter(
-							(r: CheckinRecord): boolean => r.registrationId !== participant.id
-						);
-						currentActivity.checkinRecords = updatedRecords;
-						currentActivity.checkins = updatedRecords.length;
-						await updateActivity(currentActivity);
-					}
-					
+					await this.refreshActivityData();
 					uni.hideLoading();
 					uni.showToast({ title: '签到已取消', icon: 'success' });
 				} catch (e) {

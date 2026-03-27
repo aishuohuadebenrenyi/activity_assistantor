@@ -34,6 +34,7 @@ export class RequestOptions {
 export type RegistrationResponse = {
   id: number;
   activity_id: number;
+  user_id: number | null;
   name: string;
   phone: string;
   created_at: string;
@@ -53,6 +54,7 @@ export type ActivityResponse = {
   name: string;
   type: string;
   start_time: string;
+  end_time: string | null;
   location: string;
   description: string;
   capacity: number;

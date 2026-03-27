@@ -1,0 +1,58 @@
+
+import { activitiesState, saveToStorage } from '@/store/index.uts'
+
+export type IdMapping = {
+  tempId: number
+  realId: number
+  type: string
+}
+
+const ID_MAPPINGS_KEY = 'offline_id_mappings'
+
+export const getIdMappings = (): IdMapping[] => {
+  try {
+    const data = uni.getStorageSync(ID_MAPPINGS_KEY)
+    if (data != null && Array.isArray(data)) {
+      return data as IdMapping[]
+    }
+  } catch (e) {
+    console.error('Failed to get id mappings', e)
+  }
+  return []
+}
+
+export const saveIdMappings = (mappings: IdMapping[]) => {
+  try {
+    uni.setStorageSync(ID_MAPPINGS_KEY, mappings)
+  } catch (e) {
+    console.error('Failed to save id mappings', e)
+  }
+}
+
+export const addIdMapping = (tempId: number, realId: number, type: string) => {
+  const mappings = getIdMappings()
+  mappings.push({ tempId, realId, type } as IdMapping)
+  saveIdMappings(mappings)
+}
+
+export const clearIdMappings = () => {
+  saveIdMappings([])
+}
+
+export const updateActivityIdMapping = (tempId: number, realId: number, response: any) => {
+  const activityIndex = activitiesState.activities.findIndex((a: any): boolean => a.id === tempId)
+  if (activityIndex > -1) {
+    const activity = activitiesState.activities[activityIndex]
+    const updatedActivity = {
+      ...(activity as unknown as Record<string, any>),
+      id: realId,
+      syncStatus: 'synced'
+    }
+    activitiesState.activities[activityIndex] = updatedActivity as any
+    addIdMapping(tempId, realId, 'activity')
+    saveToStorage()
+    console.log(`Updated temp ID ${tempId} to real ID ${realId}`)
+    return true
+  }
+  return false
+}

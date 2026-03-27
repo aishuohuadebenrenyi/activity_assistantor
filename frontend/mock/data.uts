@@ -5,6 +5,15 @@ const now = new Date();
 const todayStr = `${now.getFullYear()}-${(now.getMonth()+1).toString().padStart(2, '0')}-${now.getDate().toString().padStart(2, '0')}`;
 const tomorrowStr = `${now.getFullYear()}-${(now.getMonth()+1).toString().padStart(2, '0')}-${(now.getDate()+1).toString().padStart(2, '0')}`;
 const yesterdayStr = `${now.getFullYear()}-${(now.getMonth()+1).toString().padStart(2, '0')}-${(now.getDate()-1).toString().padStart(2, '0')}`;
+const dayAfterTomorrowStr = `${now.getFullYear()}-${(now.getMonth()+1).toString().padStart(2, '0')}-${(now.getDate()+2).toString().padStart(2, '0')}`;
+const twoDaysAgoStr = `${now.getFullYear()}-${(now.getMonth()+1).toString().padStart(2, '0')}-${(now.getDate()-2).toString().padStart(2, '0')}`;
+const threeDaysAgoStr = `${now.getFullYear()}-${(now.getMonth()+1).toString().padStart(2, '0')}-${(now.getDate()-3).toString().padStart(2, '0')}`;
+const nextWeekStr = `${now.getFullYear()}-${(now.getMonth()+1).toString().padStart(2, '0')}-${(now.getDate()+7).toString().padStart(2, '0')}`;
+
+const currentHour = now.getHours();
+const currentMinute = now.getMinutes();
+const ongoingTimeStr = `${(currentHour - 1).toString().padStart(2, '0')}:00`;
+const ongoingEndTimeStr = `${(currentHour + 2).toString().padStart(2, '0')}:00`;
 
 export const MOCK_ACTIVITIES: any[] = [
     {
@@ -13,6 +22,7 @@ export const MOCK_ACTIVITIES: any[] = [
       name: "产品发布会",
       type: "meeting",
       start_time: `${todayStr}T14:00:00`,
+      end_time: `${todayStr}T17:00:00`,
       location: "北京国际会议中心",
       description: "欢迎参加我们的年度产品发布会，届时将发布多款创新产品。",
       capacity: 50,
@@ -24,8 +34,8 @@ export const MOCK_ACTIVITIES: any[] = [
       show_phone: true,
       show_wechat: true,
       registrations: [
-        { id: 1, activity_id: 1, name: "张三", phone: "138****1234", created_at: new Date().toISOString(), checked_in: false },
-        { id: 2, activity_id: 1, name: "李四", phone: "139****5678", created_at: new Date().toISOString(), checked_in: false }
+        { id: 1, activity_id: 1, user_id: 2, name: "张三", phone: "138****1234", created_at: new Date().toISOString(), checked_in: false },
+        { id: 2, activity_id: 1, user_id: 3, name: "李四", phone: "139****5678", created_at: new Date().toISOString(), checked_in: false }
       ],
       checkin_records: []
     },
@@ -35,6 +45,7 @@ export const MOCK_ACTIVITIES: any[] = [
       name: "技术研讨会",
       type: "training",
       start_time: `${tomorrowStr}T09:30:00`,
+      end_time: `${tomorrowStr}T12:00:00`,
       location: "上海科技园区",
       description: "深入探讨最新技术趋势和行业动态。",
       capacity: 40,
@@ -54,6 +65,7 @@ export const MOCK_ACTIVITIES: any[] = [
       name: "周末户外徒步",
       type: "social",
       start_time: `${yesterdayStr}T08:00:00`,
+      end_time: `${yesterdayStr}T16:00:00`,
       location: "香山公园",
       description: "放松心情，亲近自然，增强团队凝聚力。",
       capacity: 30,
@@ -65,17 +77,195 @@ export const MOCK_ACTIVITIES: any[] = [
       show_phone: false,
       show_wechat: false,
       registrations: [
-        { id: 10, activity_id: 3, name: "王五", phone: "136****9012", created_at: new Date().toISOString(), checked_in: true },
-        { id: 11, activity_id: 3, name: "赵六", phone: "137****3456", created_at: new Date().toISOString(), checked_in: true }
+        { id: 10, activity_id: 3, user_id: 4, name: "王五", phone: "136****9012", created_at: new Date().toISOString(), checked_in: true },
+        { id: 11, activity_id: 3, user_id: 5, name: "赵六", phone: "137****3456", created_at: new Date().toISOString(), checked_in: true }
       ],
       checkin_records: [
         { id: 1, registration_id: 10, activity_id: 3, checkin_time: `${yesterdayStr}T08:05:00` },
         { id: 2, registration_id: 11, activity_id: 3, checkin_time: `${yesterdayStr}T08:10:00` }
       ]
+    },
+    {
+      id: 4,
+      organizer_id: 2,
+      name: "AI技术分享会",
+      type: "training",
+      start_time: `${todayStr}T${ongoingTimeStr}:00`,
+      end_time: `${todayStr}T${ongoingEndTimeStr}:00`,
+      location: "中关村创业大街",
+      description: "分享最新AI技术发展趋势，探讨大模型应用场景。",
+      capacity: 100,
+      status: "ongoing",
+      views_count: 520,
+      created_at: new Date().toISOString(),
+      host_phone: "135****8888",
+      host_wechat: "ai_share",
+      show_phone: true,
+      show_wechat: true,
+      registrations: [
+        { id: 20, activity_id: 4, user_id: 1, name: "测试用户", phone: "13800138000", created_at: new Date().toISOString(), checked_in: true },
+        { id: 21, activity_id: 4, user_id: 6, name: "钱七", phone: "135****1111", created_at: new Date().toISOString(), checked_in: false },
+        { id: 22, activity_id: 4, user_id: 7, name: "孙八", phone: "136****2222", created_at: new Date().toISOString(), checked_in: true }
+      ],
+      checkin_records: [
+        { id: 3, registration_id: 20, activity_id: 4, checkin_time: `${todayStr}T${ongoingTimeStr}:05` },
+        { id: 4, registration_id: 22, activity_id: 4, checkin_time: `${todayStr}T${ongoingTimeStr}:10` }
+      ]
+    },
+    {
+      id: 5,
+      organizer_id: 3,
+      name: "创业者沙龙",
+      type: "meeting",
+      start_time: `${nextWeekStr}T19:00:00`,
+      end_time: `${nextWeekStr}T21:30:00`,
+      location: "望京SOHO",
+      description: "汇聚创业者，分享创业经验，拓展人脉资源。",
+      capacity: 60,
+      status: "upcoming",
+      views_count: 156,
+      created_at: new Date().toISOString(),
+      host_phone: "186****6666",
+      host_wechat: "startup_club",
+      show_phone: true,
+      show_wechat: true,
+      registrations: [
+        { id: 30, activity_id: 5, user_id: 1, name: "测试用户", phone: "13800138000", created_at: new Date().toISOString(), checked_in: false }
+      ],
+      checkin_records: []
+    },
+    {
+      id: 6,
+      organizer_id: 1,
+      name: "团队建设活动",
+      type: "social",
+      start_time: `${twoDaysAgoStr}T10:00:00`,
+      end_time: `${twoDaysAgoStr}T18:00:00`,
+      location: "奥林匹克森林公园",
+      description: "团队拓展训练，增进同事间的默契与信任。",
+      capacity: 25,
+      status: "ended",
+      views_count: 320,
+      created_at: new Date().toISOString(),
+      host_phone: "138****8000",
+      host_wechat: "zentro_helper",
+      show_phone: true,
+      show_wechat: true,
+      registrations: [
+        { id: 40, activity_id: 6, user_id: 8, name: "周九", phone: "139****9999", created_at: new Date().toISOString(), checked_in: true },
+        { id: 41, activity_id: 6, user_id: 9, name: "吴十", phone: "137****7777", created_at: new Date().toISOString(), checked_in: true },
+        { id: 42, activity_id: 6, user_id: 10, name: "郑十一", phone: "136****6666", created_at: new Date().toISOString(), checked_in: false }
+      ],
+      checkin_records: [
+        { id: 5, registration_id: 40, activity_id: 6, checkin_time: `${twoDaysAgoStr}T09:55:00` },
+        { id: 6, registration_id: 41, activity_id: 6, checkin_time: `${twoDaysAgoStr}T10:02:00` }
+      ]
+    },
+    {
+      id: 7,
+      organizer_id: 4,
+      name: "读书会：人类简史",
+      type: "social",
+      start_time: `${dayAfterTomorrowStr}T14:00:00`,
+      end_time: `${dayAfterTomorrowStr}T16:30:00`,
+      location: "三里屯Page One书店",
+      description: "一起阅读和讨论《人类简史》，探索人类文明的发展历程。",
+      capacity: 20,
+      status: "upcoming",
+      views_count: 89,
+      created_at: new Date().toISOString(),
+      host_phone: "158****5555",
+      host_wechat: "book_lover",
+      show_phone: false,
+      show_wechat: true,
+      registrations: [
+        { id: 50, activity_id: 7, user_id: 1, name: "测试用户", phone: "13800138000", created_at: new Date().toISOString(), checked_in: false },
+        { id: 51, activity_id: 7, user_id: 11, name: "冯十二", phone: "159****3333", created_at: new Date().toISOString(), checked_in: false }
+      ],
+      checkin_records: []
+    },
+    {
+      id: 8,
+      organizer_id: 5,
+      name: "摄影外拍活动",
+      type: "social",
+      start_time: `${threeDaysAgoStr}T06:00:00`,
+      end_time: `${threeDaysAgoStr}T11:00:00`,
+      location: "颐和园",
+      description: "日出时分在颐和园进行摄影外拍，交流摄影技巧。",
+      capacity: 15,
+      status: "ended",
+      views_count: 210,
+      created_at: new Date().toISOString(),
+      host_phone: "133****4444",
+      host_wechat: null,
+      show_phone: true,
+      show_wechat: false,
+      registrations: [
+        { id: 60, activity_id: 8, user_id: 1, name: "测试用户", phone: "13800138000", created_at: new Date().toISOString(), checked_in: true },
+        { id: 61, activity_id: 8, user_id: 12, name: "陈十三", phone: "131****1111", created_at: new Date().toISOString(), checked_in: true },
+        { id: 62, activity_id: 8, user_id: 13, name: "褚十四", phone: "132****2222", created_at: new Date().toISOString(), checked_in: true }
+      ],
+      checkin_records: [
+        { id: 7, registration_id: 60, activity_id: 8, checkin_time: `${threeDaysAgoStr}T05:58:00` },
+        { id: 8, registration_id: 61, activity_id: 8, checkin_time: `${threeDaysAgoStr}T06:05:00` },
+        { id: 9, registration_id: 62, activity_id: 8, checkin_time: `${threeDaysAgoStr}T06:10:00` }
+      ]
+    },
+    {
+      id: 9,
+      organizer_id: 1,
+      name: "产品需求评审会",
+      type: "meeting",
+      start_time: `${tomorrowStr}T15:00:00`,
+      end_time: `${tomorrowStr}T17:00:00`,
+      location: "公司会议室A",
+      description: "Q2产品需求评审，讨论新功能规划。",
+      capacity: 20,
+      status: "upcoming",
+      views_count: 45,
+      created_at: new Date().toISOString(),
+      host_phone: "138****8000",
+      host_wechat: null,
+      show_phone: false,
+      show_wechat: false,
+      registrations: [
+        { id: 70, activity_id: 9, user_id: 14, name: "卫十五", phone: "138****8888", created_at: new Date().toISOString(), checked_in: false },
+        { id: 71, activity_id: 9, user_id: 15, name: "蒋十六", phone: "139****9999", created_at: new Date().toISOString(), checked_in: false }
+      ],
+      checkin_records: []
+    },
+    {
+      id: 10,
+      organizer_id: 6,
+      name: "瑜伽体验课",
+      type: "training",
+      start_time: `${nextWeekStr}T07:00:00`,
+      end_time: `${nextWeekStr}T08:30:00`,
+      location: "朝阳公园瑜伽馆",
+      description: "专业瑜伽教练带领，适合零基础学员。",
+      capacity: 12,
+      status: "upcoming",
+      views_count: 78,
+      created_at: new Date().toISOString(),
+      host_phone: "185****0000",
+      host_wechat: "yoga_life",
+      show_phone: true,
+      show_wechat: true,
+      registrations: [],
+      checkin_records: []
     }
 ];
 
-export const MOCK_USER = {
+export const MOCK_USER: {
+  id: number;
+  username: string;
+  avatar_url: string;
+  phone: string;
+  bio: string;
+  is_certified: boolean;
+  token: string;
+} = {
   id: 1,
   username: "测试用户",
   avatar_url: "/static/avatar.png",

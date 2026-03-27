@@ -1,0 +1,463 @@
+import { getStore } from '../store/index.uts'
+
+const API_BASE_URL = 'https://api.zentro.app'
+
+interface AnalyticsConfig {
+  appId: string;
+  appVersion: string;
+  platform: string;
+  debug: boolean;
+  reportInterval: number;
+  maxQueueSize: number;
+  enableAutoTrack: boolean;
+}
+
+interface TrackEvent {
+  event_id: string;
+  event_name: string;
+  timestamp: number;
+  user_id: string | null;
+  device_id: string;
+  session_id: string;
+  platform: string;
+  app_version: string;
+  properties: UTSJSONObject;
+}
+
+interface DeviceInfo {
+  platform: string;
+  model: string;
+  system: string;
+  version: string;
+  sdk_version: string;
+  brand: string;
+  language: string;
+  screenWidth: number;
+  screenHeight: number;
+  pixelRatio: number;
+  networkType: string;
+}
+
+const DEFAULT_CONFIG: AnalyticsConfig = {
+  appId: 'zentro',
+  appVersion: '1.0.0',
+  platform: 'unknown',
+  debug: false,
+  reportInterval: 30000,
+  maxQueueSize: 50,
+  enableAutoTrack: true
+}
+
+class Analytics {
+  private config: AnalyticsConfig;
+  private queue: TrackEvent[] = [];
+  private timer: number | null = null;
+  private userId: string | null = null;
+  private deviceId: string = '';
+  private sessionId: string = '';
+  private sessionStartTime: number = 0;
+  private lastPagePath: string = '';
+  private pageEnterTime: number = 0;
+  private isOnline: boolean = true;
+  private retryCount: number = 0;
+  private maxRetry: number = 3;
+
+  constructor(config: Partial<AnalyticsConfig> = {}) {
+    this.config = { ...DEFAULT_CONFIG, ...config };
+    this.init();
+  }
+
+  private init(): void {
+    this.deviceId = this.getDeviceId();
+    this.sessionId = this.generateSessionId();
+    this.sessionStartTime = Date.now();
+
+    this.setupNetworkListener();
+    this.startReportTimer();
+    this.restoreQueue();
+
+    if (this.config.enableAutoTrack) {
+      this.trackAppLaunch();
+    }
+  }
+
+  setUserId(userId: string | null): void {
+    this.userId = userId;
+    if (userId) {
+      this.track('user_identify', { user_id: userId });
+    }
+  }
+
+  setPlatform(platform: string): void {
+    this.config.platform = platform;
+  }
+
+  track(eventName: string, properties: UTSJSONObject = {}): void {
+    const event: TrackEvent = {
+      event_id: this.generateUUID(),
+      event_name: eventName,
+      timestamp: Date.now(),
+      user_id: this.userId,
+      device_id: this.deviceId,
+      session_id: this.sessionId,
+      platform: this.config.platform,
+      app_version: this.config.appVersion,
+      properties: this.maskSensitiveData(properties)
+    };
+
+    this.queue.push(event);
+    this.saveQueue();
+
+    if (this.queue.length >= this.config.maxQueueSize) {
+      this.flush();
+    }
+
+    if (this.config.debug) {
+      console.log('[Analytics] Track:', eventName, JSON.stringify(properties));
+    }
+  }
+
+  pageView(pageName: string, pagePath: string, properties: UTSJSONObject = {}): void {
+    const duration = this.pageEnterTime > 0 ? Date.now() - this.pageEnterTime : 0;
+    
+    this.track('page_view', {
+      page_name: pageName,
+      page_path: pagePath,
+      from_page: this.lastPagePath,
+      previous_page_duration: duration,
+      ...properties
+    } as UTSJSONObject);
+
+    this.lastPagePath = pagePath;
+    this.pageEnterTime = Date.now();
+  }
+
+  pageLeave(pageName: string, pagePath: string): void {
+    const duration = this.pageEnterTime > 0 ? Date.now() - this.pageEnterTime : 0;
+    
+    this.track('page_leave', {
+      page_name: pageName,
+      page_path: pagePath,
+      duration: duration
+    } as UTSJSONObject);
+  }
+
+  buttonClick(buttonName: string, pageName: string, properties: UTSJSONObject = {}): void {
+    this.track('button_click', {
+      button_name: buttonName,
+      page_name: pageName,
+      ...properties
+    } as UTSJSONObject);
+  }
+
+  formSubmit(formName: string, success: boolean, properties: UTSJSONObject = {}): void {
+    this.track('form_submit', {
+      form_name: formName,
+      success: success,
+      ...properties
+    } as UTSJSONObject);
+  }
+
+  errorEvent(errorType: string, errorMessage: string, properties: UTSJSONObject = {}): void {
+    this.track('error', {
+      error_type: errorType,
+      error_message: errorMessage,
+      ...properties
+    } as UTSJSONObject);
+  }
+
+  async flush(): Promise<void> {
+    if (this.queue.length === 0) return;
+    if (!this.isOnline) {
+      return;
+    }
+
+    const events = [...this.queue];
+    this.queue = [];
+    this.clearQueue();
+
+    try {
+      await this.sendEvents(events);
+      this.retryCount = 0;
+    } catch (error) {
+      this.queue = [...events, ...this.queue];
+      this.saveQueue();
+      
+      if (this.config.debug) {
+        console.error('[Analytics] Flush failed:', error);
+      }
+    }
+  }
+
+  private async sendEvents(events: TrackEvent[]): Promise<void> {
+    const deviceInfo = await this.getDeviceInfo();
+    
+    const response = await uni.request({
+      url: `${API_BASE_URL}/api/analytics/events`,
+      method: 'POST',
+      data: {
+        events: events,
+        device_info: deviceInfo
+      } as UTSJSONObject,
+      header: {
+        'Content-Type': 'application/json'
+      },
+      timeout: 10000
+    });
+
+    if (response.statusCode !== 200) {
+      throw new Error(`Analytics send failed: ${response.statusCode}`);
+    }
+  }
+
+  private getDeviceId(): string {
+    let deviceId = uni.getStorageSync('analytics_device_id') as string;
+    if (!deviceId) {
+      deviceId = this.generateUUID();
+      uni.setStorageSync('analytics_device_id', deviceId);
+    }
+    return deviceId;
+  }
+
+  private generateSessionId(): string {
+    return `${Date.now()}_${this.generateUUID().substring(0, 8)}`;
+  }
+
+  private generateUUID(): string {
+    const chars = '0123456789abcdef';
+    let uuid = '';
+    for (let i = 0; i < 36; i++) {
+      if (i === 8 || i === 13 || i === 18 || i === 23) {
+        uuid += '-';
+      } else if (i === 14) {
+        uuid += '4';
+      } else if (i === 19) {
+        uuid += chars[(Math.random() * 4 | 8).toString(16)];
+      } else {
+        uuid += chars[(Math.random() * 16).toString(16)];
+      }
+    }
+    return uuid;
+  }
+
+  private async getDeviceInfo(): Promise<DeviceInfo> {
+    const systemInfo = uni.getSystemInfoSync();
+    
+    let networkType = 'unknown';
+    try {
+      const networkInfo = await uni.getNetworkType();
+      networkType = networkInfo.networkType;
+    } catch (e) {
+    }
+
+    return {
+      platform: systemInfo.platform || 'unknown',
+      model: systemInfo.model || 'unknown',
+      system: systemInfo.system || 'unknown',
+      version: systemInfo.version || 'unknown',
+      sdk_version: (systemInfo as any).SDKVersion || '',
+      brand: (systemInfo as any).brand || 'unknown',
+      language: systemInfo.language || 'unknown',
+      screenWidth: systemInfo.screenWidth || 0,
+      screenHeight: systemInfo.screenHeight || 0,
+      pixelRatio: systemInfo.pixelRatio || 1,
+      networkType: networkType
+    };
+  }
+
+  private setupNetworkListener(): void {
+    uni.onNetworkStatusChange((result) => {
+      this.isOnline = result.isConnected;
+      if (this.isOnline) {
+        this.syncOfflineEvents();
+      }
+    });
+
+    uni.getNetworkType().then((result) => {
+      this.isOnline = result.networkType !== 'none';
+    });
+  }
+
+  private startReportTimer(): void {
+    this.timer = setInterval(() => {
+      this.flush();
+    }, this.config.reportInterval) as unknown as number;
+  }
+
+  private saveQueue(): void {
+    try {
+      uni.setStorageSync('analytics_queue', JSON.stringify(this.queue));
+    } catch (e) {
+      if (this.config.debug) {
+        console.error('[Analytics] Save queue failed:', e);
+      }
+    }
+  }
+
+  private restoreQueue(): void {
+    try {
+      const saved = uni.getStorageSync('analytics_queue') as string;
+      if (saved) {
+        this.queue = JSON.parse(saved) as TrackEvent[];
+        if (this.queue.length > 100) {
+          this.queue = this.queue.slice(-100);
+        }
+      }
+    } catch (e) {
+      this.queue = [];
+    }
+  }
+
+  private clearQueue(): void {
+    try {
+      uni.removeStorageSync('analytics_queue');
+    } catch (e) {
+    }
+  }
+
+  private syncOfflineEvents(): void {
+    const stored = uni.getStorageSync('analytics_offline') as string;
+    if (stored) {
+      try {
+        const events = JSON.parse(stored) as TrackEvent[];
+        this.queue = [...events, ...this.queue];
+        uni.removeStorageSync('analytics_offline');
+        this.flush();
+      } catch (e) {
+      }
+    }
+  }
+
+  private trackAppLaunch(): void {
+    this.track('app_launch', {
+      launch_time: this.sessionStartTime,
+      is_first_launch: !uni.getStorageSync('has_launched')
+    } as UTSJSONObject);
+    
+    uni.setStorageSync('has_launched', true);
+  }
+
+  trackAppShow(): void {
+    this.track('app_show', {
+      session_duration: Date.now() - this.sessionStartTime
+    } as UTSJSONObject);
+  }
+
+  trackAppHide(): void {
+    this.track('app_hide', {
+      session_duration: Date.now() - this.sessionStartTime
+    } as UTSJSONObject);
+    this.flush();
+  }
+
+  private maskSensitiveData(data: UTSJSONObject): UTSJSONObject {
+    const SENSITIVE_KEYS = ['phone', 'mobile', 'email', 'password', 'token', 'secret'];
+    const masked = { ...data } as Record<string, any>;
+    
+    for (const key of Object.keys(masked)) {
+      const lowerKey = key.toLowerCase();
+      if (SENSITIVE_KEYS.some(s => lowerKey.includes(s))) {
+        if (typeof masked[key] === 'string') {
+          const value = masked[key] as string;
+          if (lowerKey.includes('phone') || lowerKey.includes('mobile')) {
+            masked[key] = value.replace(/(\d{3})\d{4}(\d{4})/, '$1****$2');
+          } else if (lowerKey.includes('email')) {
+            masked[key] = value.replace(/(.{2}).*@/, '$1***@');
+          } else {
+            masked[key] = '******';
+          }
+        }
+      }
+    }
+    
+    return masked as UTSJSONObject;
+  }
+
+  destroy(): void {
+    if (this.timer !== null) {
+      clearInterval(this.timer);
+      this.timer = null;
+    }
+    this.flush();
+  }
+
+  getSessionId(): string {
+    return this.sessionId;
+  }
+
+  getDeviceId(): string {
+    return this.deviceId;
+  }
+}
+
+const platform = 
+  // #ifdef APP-PLUS
+  'app'
+  // #endif
+  // #ifdef MP-WEIXIN
+  'wechat'
+  // #endif
+  // #ifdef H5
+  'h5'
+  // #endif
+;
+
+export const analytics = new Analytics({
+  appId: 'zentro',
+  appVersion: '1.0.0',
+  platform: platform,
+  debug: false,
+  reportInterval: 30000,
+  maxQueueSize: 50,
+  enableAutoTrack: true
+});
+
+export const EVENT_NAMES = {
+  USER_REGISTER: 'user_register',
+  USER_LOGIN: 'user_login',
+  USER_LOGOUT: 'user_logout',
+  USER_DELETE: 'user_delete',
+  
+  ACTIVITY_CREATE: 'activity_create',
+  ACTIVITY_EDIT: 'activity_edit',
+  ACTIVITY_DELETE: 'activity_delete',
+  ACTIVITY_VIEW: 'activity_view',
+  ACTIVITY_SHARE: 'activity_share',
+  ACTIVITY_REPORT: 'activity_report',
+  
+  REGISTRATION_SUBMIT: 'registration_submit',
+  REGISTRATION_CANCEL: 'registration_cancel',
+  REGISTRATION_VIEW: 'registration_view',
+  
+  CHECKIN_SCAN: 'checkin_scan',
+  CHECKIN_MANUAL: 'checkin_manual',
+  CHECKIN_CANCEL: 'checkin_cancel',
+  
+  EXPORT_SUBMIT: 'export_submit',
+  FEEDBACK_SUBMIT: 'feedback_submit',
+  PROFILE_EDIT: 'profile_edit',
+  
+  PAGE_VIEW: 'page_view',
+  PAGE_LEAVE: 'page_leave',
+  BUTTON_CLICK: 'button_click',
+  FORM_SUBMIT: 'form_submit',
+  ERROR: 'error'
+};
+
+export const PAGE_NAMES: Record<string, string> = {
+  'pages/activities/activities': '首页',
+  'pages/activity/create/create': '创建活动',
+  'pages/activity/detail/detail': '活动详情',
+  'pages/activity/participants/participants': '报名人员',
+  'pages/activity/share/share': '分享活动',
+  'pages/activity/success/success': '创建成功',
+  'pages/activity/ticket/ticket': '报名凭证',
+  'pages/profile/profile': '个人中心',
+  'pages/profile/edit/edit': '编辑资料',
+  'pages/profile/feedback/feedback': '意见反馈',
+  'pages/auth/login': '登录页',
+  'pages/user/my-activities/my-activities': '我的报名',
+  'pages/user/created-activities/created-activities': '我创建的活动',
+  'pages/about/about': '关于',
+  'pages/webview/webview': '网页'
+};

@@ -17,6 +17,7 @@ export interface Registration {
    * checkedIn 与后端计算字段保持一致，便于列表快速展示状态。
    */
   id: number;
+  userId: number | null;
   name: string;
   phone: string;
   createdAt: string;
@@ -33,6 +34,7 @@ export interface Activity {
   type: string;
   date: string;
   time: string;
+  endTime: string | null;
   location: string;
   description: string;
   capacity: number;

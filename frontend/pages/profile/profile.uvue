@@ -273,14 +273,19 @@
 				return '主办方用户';
 				// #endif
 			},
+			myCreatedActivities() {
+				const user = activitiesState.user;
+				if (user == null) return [];
+				return activitiesState.activities.filter((a: any): boolean => a.organizer_id === user.id);
+			},
 			totalActivities() {
-				return activitiesState.activities.length;
+				return this.myCreatedActivities.length;
 			},
 			ongoingActivities() {
-				return activitiesState.activities.filter(a => a.status === 'ongoing').length;
+				return this.myCreatedActivities.filter((a: any): boolean => a.status === 'ongoing').length;
 			},
 			totalParticipants() {
-				return activitiesState.activities.reduce((sum, a) => sum + (a.participants || 0), 0);
+				return this.myCreatedActivities.reduce((sum: number, a: any): number => sum + (a.participants || 0), 0);
 			},
 			themeLabel(): string {
 				return getThemeLabel(this.currentThemeMode);

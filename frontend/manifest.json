@@ -7,7 +7,7 @@
 	"uni-app-x": {},
 	"quickapp": {},
 	"mp-weixin": {
-		"appid": "wx1234567890abcdef",
+		"appid": "",
 		"setting": {
 			"urlCheck": false
 		},
@@ -32,6 +32,28 @@
 		"enable": false
 	},
 	"vueVersion": "3",
+	"app-plus": {
+		"distribute": {
+			"sdkConfigs": {
+				"statics": {
+					"umeng": {
+						"appkey_ios": "YOUR_IOS_APPKEY",
+						"channelid_ios": "AppStore",
+						"appkey_android": "YOUR_ANDROID_APPKEY",
+						"channelid_android": "GooglePlay"
+					}
+				}
+			},
+			"icons": {
+				"android": {
+					"hdpi": "",
+					"xhdpi": "",
+					"xxhdpi": "",
+					"xxxhdpi": ""
+				}
+			}
+		}
+	},
 	"app": {
 		"distribute": {
 			"icons": {

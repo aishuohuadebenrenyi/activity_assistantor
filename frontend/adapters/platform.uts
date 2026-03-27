@@ -1,22 +1,28 @@
 /**
  * 跨端适配层
  * 
- * 本文件负责处理不同运行环境（微信小程序、iOS App、H5 等）之间的行为差异。
+ * 本文件负责处理不同运行环境（微信小程序、iOS App、Android App、H5 等）之间的行为差异。
  * 通过 uni-app 的条件编译指令（#ifdef）实现针对特定平台的优化逻辑，
  * 为上层业务提供统一的跨端调用接口。
+ * 
+ * 优化内容：
+ * - 添加 Android 平台识别支持
+ * - 添加平台能力检测方法
+ * - 统一平台相关判断逻辑
  */
 
-// 支持的运行平台枚举
-export type ClientPlatform = 'mp_weixin' | 'ios' | 'h5' | 'unknown'
+export type ClientPlatform = 'mp_weixin' | 'ios' | 'android' | 'h5' | 'unknown'
 
 /**
  * 获取当前运行平台标识
  * 
- * @returns {ClientPlatform} 返回当前运行环境对应的字符串标识
- * @description
- * 1. 用于后端接口请求头 `X-Client-Platform`，辅助后端进行设备适配与业务统计。
- * 2. 作为数据埋点系统（Analytics）的核心维度字段。
- * 3. 决定 UI 渲染策略（如某些功能仅在特定端展示）。
+ * 返回：
+ * - ClientPlatform: 当前运行环境对应的字符串标识
+ * 
+ * 用途：
+ * 1. 用于后端接口请求头 `X-Client-Platform`，辅助后端进行设备适配与业务统计
+ * 2. 作为数据埋点系统（Analytics）的核心维度字段
+ * 3. 决定 UI 渲染策略（如某些功能仅在特定端展示）
  */
 export const getClientPlatform = (): ClientPlatform => {
   let p: ClientPlatform = 'unknown'
@@ -29,9 +35,22 @@ export const getClientPlatform = (): ClientPlatform => {
   // App 端（iOS/Android）
   // #ifdef APP-PLUS
   const sys = uni.getSystemInfoSync()
-  // 当前仅针对 iOS 进行了深度适配，Android 暂归为 unknown 或按需扩展
-  if ((sys as any).platform == 'ios') p = 'ios'
-  else p = 'unknown'
+  const platform = (sys as any).platform
+  
+  if (platform === 'ios') {
+    p = 'ios'
+  } else if (platform === 'android') {
+    p = 'android'
+  } else {
+    // 兜底：通过 UA 判断
+    const ua = (sys as any).ua || ''
+    const uaLower = ua.toLowerCase()
+    if (uaLower.includes('android')) {
+      p = 'android'
+    } else if (uaLower.includes('iphone') || uaLower.includes('ipad')) {
+      p = 'ios'
+    }
+  }
   // #endif
   
   // H5 网页端
@@ -43,13 +62,112 @@ export const getClientPlatform = (): ClientPlatform => {
 }
 
 /**
+ * 平台能力检测对象
+ * 
+ * 提供统一的平台能力判断接口，避免在业务代码中分散条件编译
+ */
+export const platform = {
+  /**
+   * 获取当前平台
+   */
+  get current(): ClientPlatform {
+    return getClientPlatform()
+  },
+  
+  /**
+   * 是否为小程序
+   */
+  get isMiniProgram(): boolean {
+    // #ifdef MP-WEIXIN
+    return true
+    // #endif
+    return false
+  },
+  
+  /**
+   * 是否为 App
+   */
+  get isApp(): boolean {
+    // #ifdef APP-PLUS
+    return true
+    // #endif
+    return false
+  },
+  
+  /**
+   * 是否为 iOS
+   */
+  get isIOS(): boolean {
+    return getClientPlatform() === 'ios'
+  },
+  
+  /**
+   * 是否为 Android
+   */
+  get isAndroid(): boolean {
+    return getClientPlatform() === 'android'
+  },
+  
+  /**
+   * 是否为 H5
+   */
+  get isH5(): boolean {
+    return getClientPlatform() === 'h5'
+  },
+  
+  /**
+   * 是否支持创建活动（仅 App）
+   */
+  get canCreateActivity(): boolean {
+    return this.isApp === true
+  },
+  
+  /**
+   * 是否支持报名活动（仅小程序）
+   */
+  get canRegisterActivity(): boolean {
+    return this.isMiniProgram === true
+  },
+  
+  /**
+   * 是否支持签到管理（仅 App）
+   */
+  get canManageCheckin(): boolean {
+    return this.isApp === true
+  },
+  
+  /**
+   * 是否支持相机扫码
+   */
+  get canScanQRCode(): boolean {
+    return this.isApp === true || this.isMiniProgram === true
+  },
+  
+  /**
+   * 是否支持保存图片到相册
+   */
+  get canSaveToAlbum(): boolean {
+    return this.isApp === true || this.isMiniProgram === true
+  },
+  
+  /**
+   * 是否支持微信分享
+   */
+  get canShareToWeChat(): boolean {
+    return this.isMiniProgram === true
+  }
+}
+
+/**
  * 跨端打开外部链接
  * 
- * @param url 需要打开的目标 URL 字符串
- * @description
- * 1. 微信小程序：由于安全策略，无法直接打开外链，统一跳转至内部 Webview 页面承载。
- * 2. App 端：调用系统底层接口（plus.runtime.openURL）使用系统默认浏览器打开。
- * 3. H5 端：使用标准的 window.open 在新窗口中打开。
+ * 参数：
+ * - url: 需要打开的目标 URL 字符串
+ * 
+ * 行为：
+ * 1. 微信小程序：由于安全策略，无法直接打开外链，统一跳转至内部 Webview 页面承载
+ * 2. App 端：调用系统底层接口（plus.runtime.openURL）使用系统默认浏览器打开
+ * 3. H5 端：使用标准的 window.open 在新窗口中打开
  */
 export const openExternalUrl = (url: string) => {
   if (!url) return
@@ -68,4 +186,36 @@ export const openExternalUrl = (url: string) => {
   // #ifdef H5
   window.open(url)
   // #endif
+}
+
+/**
+ * 获取安全区域边距
+ * 
+ * 返回：
+ * - top: 顶部安全区域高度
+ * - bottom: 底部安全区域高度
+ * 
+ * 用于适配刘海屏、灵动岛等设备
+ */
+export const getSafeAreaInsets = (): { top: number; bottom: number } => {
+  const sys = uni.getSystemInfoSync()
+  return {
+    top: (sys as any).safeAreaInsets?.top || 0,
+    bottom: (sys as any).safeAreaInsets?.bottom || 0
+  }
+}
+
+/**
+ * 判断是否为全面屏设备
+ * 
+ * 返回：
+ * - boolean: 是否为全面屏设备
+ * 
+ * 判断依据：屏幕宽高比大于 2
+ */
+export const isFullScreenDevice = (): boolean => {
+  const sys = uni.getSystemInfoSync()
+  const { screenHeight, screenWidth } = sys
+  const ratio = screenHeight / screenWidth
+  return ratio > 2
 }

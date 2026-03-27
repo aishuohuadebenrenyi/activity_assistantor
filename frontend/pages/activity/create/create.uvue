@@ -176,6 +176,7 @@
 					name: this.form.name,
 					date: this.form.date,
 					time: this.form.time,
+					endTime: null as string | null,
 					location: this.form.location,
 					status: 'upcoming',
 					participants: 0,

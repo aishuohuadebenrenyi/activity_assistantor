@@ -1,0 +1,504 @@
+const UMENG_DEBUG = false
+
+interface UmengConfig {
+  ios_appkey: string;
+  android_appkey: string;
+  wechat_appkey: string;
+  debug: boolean;
+}
+
+const UMENG_CONFIG: UmengConfig = {
+  ios_appkey: 'YOUR_IOS_APPKEY',
+  android_appkey: 'YOUR_ANDROID_APPKEY',
+  wechat_appkey: 'YOUR_WECHAT_APPKEY',
+  debug: UMENG_DEBUG
+}
+
+export enum AnalyticsEvent {
+  APP_LAUNCH = 'app_launch',
+  APP_SHOW = 'app_show',
+  APP_HIDE = 'app_hide',
+  PAGE_VIEW = 'page_view',
+  PAGE_LEAVE = 'page_leave',
+  APP_CRASH = 'app_crash',
+  
+  USER_REGISTER = 'user_register',
+  USER_LOGIN = 'user_login',
+  USER_LOGOUT = 'user_logout',
+  USER_DELETE_REQUEST = 'user_delete_request',
+  USER_DELETE_COMPLETE = 'user_delete_complete',
+  
+  ACTIVITY_CREATE_START = 'activity_create_start',
+  ACTIVITY_CREATE_SUBMIT = 'activity_create_submit',
+  ACTIVITY_CREATE_SUCCESS = 'activity_create_success',
+  ACTIVITY_CREATE_FAIL = 'activity_create_fail',
+  ACTIVITY_CREATE_VALIDATION_FAIL = 'activity_create_validation_fail',
+  ACTIVITY_EDIT = 'activity_edit',
+  ACTIVITY_DELETE = 'activity_delete',
+  ACTIVITY_VIEW = 'activity_view',
+  ACTIVITY_SHARE = 'activity_share',
+  ACTIVITY_REPORT = 'activity_report',
+  
+  REGISTRATION_CLICK = 'registration_click',
+  REGISTRATION_CONFIRM = 'registration_confirm',
+  REGISTRATION_SUCCESS = 'registration_success',
+  REGISTRATION_FAIL = 'registration_fail',
+  REGISTRATION_CANCEL = 'registration_cancel',
+  REGISTRATION_TICKET_VIEW = 'registration_ticket_view',
+  
+  CHECKIN_SCAN = 'checkin_scan',
+  CHECKIN_SCAN_SUCCESS = 'checkin_scan_success',
+  CHECKIN_SCAN_FAIL = 'checkin_scan_fail',
+  CHECKIN_MANUAL = 'checkin_manual',
+  CHECKIN_SUCCESS = 'checkin_success',
+  CHECKIN_CANCEL = 'checkin_cancel',
+  
+  EXPORT_SUBMIT = 'export_submit',
+  EXPORT_SUCCESS = 'export_success',
+  FEEDBACK_SUBMIT = 'feedback_submit',
+  PROFILE_EDIT = 'profile_edit',
+  THEME_CHANGE = 'theme_change',
+  NOTIFICATION_SETTING = 'notification_setting',
+  
+  LOGIN_GET_CODE = 'login_get_code',
+  LOGIN_SUBMIT = 'login_submit',
+  LOGIN_INPUT_PHONE = 'login_input_phone',
+  
+  API_ERROR = 'api_error',
+  FORM_VALIDATION_ERROR = 'form_validation_error',
+  PERMISSION_DENIED = 'permission_denied',
+  NETWORK_ERROR = 'network_error',
+  
+  CLICK_CREATE_BUTTON = 'click_create_button',
+  CLICK_CHECKIN_MANAGE = 'click_checkin_manage',
+  COPY_LINK = 'copy_link',
+  SAVE_POSTER = 'save_poster'
+}
+
+export enum AnalyticsPage {
+  ACTIVITIES = 'activities',
+  LOGIN = 'login',
+  CREATE_ACTIVITY = 'create_activity',
+  ACTIVITY_DETAIL = 'activity_detail',
+  PARTICIPANTS = 'participants',
+  SHARE = 'share',
+  SUCCESS = 'success',
+  TICKET = 'ticket',
+  PROFILE = 'profile',
+  PROFILE_EDIT = 'profile_edit',
+  FEEDBACK = 'feedback',
+  MY_ACTIVITIES = 'my_activities',
+  CREATED_ACTIVITIES = 'created_activities',
+  ABOUT = 'about',
+  WEBVIEW = 'webview'
+}
+
+export type LoginMethod = 'phone' | 'wechat' | 'apple'
+export type CheckinMethod = 'scan' | 'manual'
+export type ShareMethod = 'link' | 'qrcode' | 'poster' | 'wechat'
+export type ActivitySource = 'list' | 'search' | 'share' | 'qrcode'
+export type ErrorType = 'network' | 'validation' | 'permission' | 'business' | 'unknown'
+export type ReportReason = 'spam' | 'inappropriate' | 'illegal' | 'fraud' | 'other'
+export type ThemeMode = 'light' | 'dark' | 'auto'
+
+export interface AnalyticsProperties {
+  [key: string]: string | number | boolean | null | string[];
+}
+
+class UmengAnalytics {
+  private isInitialized: boolean = false;
+  private userId: string | null = null;
+  private sessionStartTime: number = 0;
+  private pageEnterTime: number = 0;
+  private currentPageName: string = '';
+  
+  init(): void {
+    if (this.isInitialized) return;
+    
+    this.sessionStartTime = Date.now();
+    
+    // #ifdef MP-WEIXIN
+    this.initWechat();
+    // #endif
+    
+    // #ifdef APP-PLUS
+    this.initApp();
+    // #endif
+    
+    this.isInitialized = true;
+    
+    if (UMENG_CONFIG.debug) {
+      console.log('[Analytics] Initialized');
+    }
+  }
+  
+  // #ifdef MP-WEIXIN
+  private initWechat(): void {
+    try {
+      const uma = require('umtrack-wx');
+      uma.init({
+        appKey: UMENG_CONFIG.wechat_appkey,
+        useOpenid: true,
+        autoGetOpenid: true,
+        debug: UMENG_CONFIG.debug
+      });
+      
+      if (UMENG_CONFIG.debug) {
+        console.log('[Analytics] WeChat SDK initialized');
+      }
+    } catch (e) {
+      console.warn('[Analytics] WeChat SDK not found, please install umtrack-wx');
+    }
+  }
+  // #endif
+  
+  // #ifdef APP-PLUS
+  private initApp(): void {
+    if (UMENG_CONFIG.debug) {
+      console.log('[Analytics] App SDK initialized via manifest.json');
+    }
+  }
+  // #endif
+  
+  setUserId(userId: string | null): void {
+    this.userId = userId;
+    
+    // #ifdef MP-WEIXIN
+    try {
+      const uma = require('umtrack-wx');
+      if (userId) {
+        uma.setUserId(userId);
+      } else {
+        uma.resetUserId();
+      }
+    } catch (e) {
+    }
+    // #endif
+    
+    // #ifdef APP-PLUS
+    try {
+      if (typeof plus !== 'undefined' && plus.umeng) {
+        if (userId) {
+          plus.umeng.setUserID(userId);
+        }
+      }
+    } catch (e) {
+    }
+    // #endif
+    
+    if (UMENG_CONFIG.debug) {
+      console.log('[Analytics] Set userId:', userId);
+    }
+  }
+  
+  track(event: AnalyticsEvent | string, properties: AnalyticsProperties = {}): void {
+    const eventName = typeof event === 'string' ? event : event as string;
+    
+    // #ifdef MP-WEIXIN
+    this.trackWechat(eventName, properties);
+    // #endif
+    
+    // #ifdef APP-PLUS
+    this.trackApp(eventName, properties);
+    // #endif
+    
+    if (UMENG_CONFIG.debug) {
+      console.log('[Analytics] Track:', eventName, JSON.stringify(properties));
+    }
+  }
+  
+  // #ifdef MP-WEIXIN
+  private trackWechat(event: string, properties: AnalyticsProperties): void {
+    try {
+      const uma = require('umtrack-wx');
+      uma.trackEvent(event, properties);
+    } catch (e) {
+      console.warn('[Analytics] WeChat track failed:', e);
+    }
+  }
+  // #endif
+  
+  // #ifdef APP-PLUS
+  private trackApp(event: string, properties: AnalyticsProperties): void {
+    try {
+      if (typeof plus !== 'undefined' && plus.umeng) {
+        plus.umeng.trackEvent(event, JSON.stringify(properties));
+      }
+    } catch (e) {
+      console.warn('[Analytics] App track failed:', e);
+    }
+  }
+  // #endif
+  
+  pageView(pageName: AnalyticsPage | string): void {
+    this.currentPageName = typeof pageName === 'string' ? pageName : pageName as string;
+    this.pageEnterTime = Date.now();
+    
+    this.track(AnalyticsEvent.PAGE_VIEW, {
+      page_name: this.currentPageName
+    });
+    
+    // #ifdef MP-WEIXIN
+    try {
+      const uma = require('umtrack-wx');
+      uma.trackPageStart(this.currentPageName);
+    } catch (e) {
+    }
+    // #endif
+    
+    // #ifdef APP-PLUS
+    try {
+      if (typeof plus !== 'undefined' && plus.umeng) {
+        plus.umeng.beginLogPageView(this.currentPageName);
+      }
+    } catch (e) {
+    }
+    // #endif
+  }
+  
+  pageLeave(): void {
+    if (!this.currentPageName) return;
+    
+    const duration = Math.floor((Date.now() - this.pageEnterTime) / 1000);
+    
+    this.track(AnalyticsEvent.PAGE_LEAVE, {
+      page_name: this.currentPageName,
+      duration: duration
+    });
+    
+    // #ifdef MP-WEIXIN
+    try {
+      const uma = require('umtrack-wx');
+      uma.trackPageEnd(this.currentPageName);
+    } catch (e) {
+    }
+    // #endif
+    
+    // #ifdef APP-PLUS
+    try {
+      if (typeof plus !== 'undefined' && plus.umeng) {
+        plus.umeng.endLogPageView(this.currentPageName);
+      }
+    } catch (e) {
+    }
+    // #endif
+    
+    this.currentPageName = '';
+  }
+  
+  appLaunch(isFirstLaunch: boolean): void {
+    this.sessionStartTime = Date.now();
+    this.track(AnalyticsEvent.APP_LAUNCH, {
+      is_first_launch: isFirstLaunch
+    });
+  }
+  
+  appShow(): void {
+    this.track(AnalyticsEvent.APP_SHOW, {
+      session_duration: Math.floor((Date.now() - this.sessionStartTime) / 1000)
+    });
+  }
+  
+  appHide(): void {
+    this.track(AnalyticsEvent.APP_HIDE, {
+      session_duration: Math.floor((Date.now() - this.sessionStartTime) / 1000)
+    });
+  }
+  
+  userLogin(method: LoginMethod, isNewUser: boolean): void {
+    this.track(AnalyticsEvent.USER_LOGIN, {
+      login_method: method,
+      is_new_user: isNewUser
+    });
+  }
+  
+  userRegister(method: LoginMethod): void {
+    this.track(AnalyticsEvent.USER_REGISTER, {
+      register_method: method
+    });
+  }
+  
+  userLogout(): void {
+    const sessionDuration = Math.floor((Date.now() - this.sessionStartTime) / 1000);
+    this.track(AnalyticsEvent.USER_LOGOUT, {
+      session_duration: sessionDuration
+    });
+    this.setUserId(null);
+  }
+  
+  activityView(activityId: number, isOrganizer: boolean, source: ActivitySource): void {
+    this.track(AnalyticsEvent.ACTIVITY_VIEW, {
+      activity_id: activityId,
+      is_organizer: isOrganizer,
+      source: source
+    });
+  }
+  
+  activityCreateSuccess(activityId: number, activityType: string, hasLocation: boolean, hasCapacity: boolean, capacity: number): void {
+    this.track(AnalyticsEvent.ACTIVITY_CREATE_SUCCESS, {
+      activity_id: activityId,
+      activity_type: activityType,
+      has_location: hasLocation,
+      has_capacity: hasCapacity,
+      capacity: capacity
+    });
+  }
+  
+  activityEdit(activityId: number, editFields: string[]): void {
+    this.track(AnalyticsEvent.ACTIVITY_EDIT, {
+      activity_id: activityId,
+      edit_fields: editFields
+    });
+  }
+  
+  activityDelete(activityId: number, participantCount: number): void {
+    this.track(AnalyticsEvent.ACTIVITY_DELETE, {
+      activity_id: activityId,
+      participant_count: participantCount
+    });
+  }
+  
+  activityShare(activityId: number, shareMethod: ShareMethod): void {
+    this.track(AnalyticsEvent.ACTIVITY_SHARE, {
+      activity_id: activityId,
+      share_method: shareMethod
+    });
+  }
+  
+  registrationSuccess(activityId: number, registrationId: number): void {
+    this.track(AnalyticsEvent.REGISTRATION_SUCCESS, {
+      activity_id: activityId,
+      registration_id: registrationId
+    });
+  }
+  
+  registrationCancel(activityId: number, reason: string): void {
+    this.track(AnalyticsEvent.REGISTRATION_CANCEL, {
+      activity_id: activityId,
+      reason: reason
+    });
+  }
+  
+  checkinScan(activityId: number): void {
+    this.track(AnalyticsEvent.CHECKIN_SCAN, {
+      activity_id: activityId
+    });
+  }
+  
+  checkinManual(activityId: number, registrationId: number): void {
+    this.track(AnalyticsEvent.CHECKIN_MANUAL, {
+      activity_id: activityId,
+      registration_id: registrationId
+    });
+  }
+  
+  checkinSuccess(activityId: number, registrationId: number, method: CheckinMethod): void {
+    this.track(AnalyticsEvent.CHECKIN_SUCCESS, {
+      activity_id: activityId,
+      registration_id: registrationId,
+      checkin_method: method
+    });
+  }
+  
+  checkinCancel(activityId: number, registrationId: number): void {
+    this.track(AnalyticsEvent.CHECKIN_CANCEL, {
+      activity_id: activityId,
+      registration_id: registrationId
+    });
+  }
+  
+  exportSubmit(activityId: number, hasEmail: boolean): void {
+    this.track(AnalyticsEvent.EXPORT_SUBMIT, {
+      activity_id: activityId,
+      has_email: hasEmail
+    });
+  }
+  
+  feedbackSubmit(feedbackType: string, hasContact: boolean): void {
+    this.track(AnalyticsEvent.FEEDBACK_SUBMIT, {
+      feedback_type: feedbackType,
+      has_contact: hasContact
+    });
+  }
+  
+  profileEdit(editFields: string[]): void {
+    this.track(AnalyticsEvent.PROFILE_EDIT, {
+      edit_fields: editFields
+    });
+  }
+  
+  themeChange(theme: ThemeMode): void {
+    this.track(AnalyticsEvent.THEME_CHANGE, {
+      theme: theme
+    });
+  }
+  
+  notificationSetting(enabled: boolean, activityReminder: boolean, checkinReminder: boolean): void {
+    this.track(AnalyticsEvent.NOTIFICATION_SETTING, {
+      enabled: enabled,
+      activity_reminder: activityReminder,
+      checkin_reminder: checkinReminder
+    });
+  }
+  
+  apiError(apiPath: string, errorCode: number | string, errorMessage: string): void {
+    this.track(AnalyticsEvent.API_ERROR, {
+      api_path: apiPath,
+      error_code: errorCode,
+      error_message: errorMessage.substring(0, 100)
+    });
+  }
+  
+  formValidationError(formName: string, errorFields: string[]): void {
+    this.track(AnalyticsEvent.FORM_VALIDATION_ERROR, {
+      form_name: formName,
+      error_fields: errorFields
+    });
+  }
+  
+  permissionDenied(permissionType: string): void {
+    this.track(AnalyticsEvent.PERMISSION_DENIED, {
+      permission_type: permissionType
+    });
+  }
+  
+  networkError(errorType: string): void {
+    this.track(AnalyticsEvent.NETWORK_ERROR, {
+      error_type: errorType
+    });
+  }
+}
+
+export const analytics = new UmengAnalytics();
+
+export function initAnalytics(): void {
+  analytics.init();
+}
+
+export function setAnalyticsUserId(userId: string | null): void {
+  analytics.setUserId(userId);
+}
+
+export function trackEvent(event: AnalyticsEvent | string, properties: AnalyticsProperties = {}): void {
+  analytics.track(event, properties);
+}
+
+export function trackPageView(pageName: AnalyticsPage | string): void {
+  analytics.pageView(pageName);
+}
+
+export function trackPageLeave(): void {
+  analytics.pageLeave();
+}
+
+export function trackAppLaunch(isFirstLaunch: boolean): void {
+  analytics.appLaunch(isFirstLaunch);
+}
+
+export function trackAppShow(): void {
+  analytics.appShow();
+}
+
+export function trackAppHide(): void {
+  analytics.appHide();
+}

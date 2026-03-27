@@ -1,0 +1,95 @@
+import { analytics, PAGE_NAMES } from './index.uts'
+
+export function setupPageTracker(): void {
+  const originalPage = Page;
+  
+  Page = function(options: Page.Options): Page.PageInstance {
+    const originalOnShow = options.onShow;
+    const originalOnHide = options.onHide;
+    const originalOnLoad = options.onLoad;
+    const originalOnUnload = options.onUnload;
+    
+    options.onShow = function(this: Page.PageInstance) {
+      const pages = getCurrentPages();
+      const currentPage = pages[pages.length - 1];
+      const pagePath = currentPage?.route || '';
+      const pageName = PAGE_NAMES[pagePath] || pagePath;
+      
+      analytics.pageView(pageName, pagePath);
+      
+      if (originalOnShow) {
+        originalOnShow.call(this);
+      }
+    };
+    
+    options.onHide = function(this: Page.PageInstance) {
+      const pages = getCurrentPages();
+      const currentPage = pages[pages.length - 1];
+      const pagePath = currentPage?.route || '';
+      const pageName = PAGE_NAMES[pagePath] || pagePath;
+      
+      analytics.pageLeave(pageName, pagePath);
+      
+      if (originalOnHide) {
+        originalOnHide.call(this);
+      }
+    };
+    
+    options.onUnload = function(this: Page.PageInstance) {
+      const pages = getCurrentPages();
+      const currentPage = pages[pages.length - 1];
+      const pagePath = currentPage?.route || '';
+      const pageName = PAGE_NAMES[pagePath] || pagePath;
+      
+      analytics.pageLeave(pageName, pagePath);
+      
+      if (originalOnUnload) {
+        originalOnUnload.call(this);
+      }
+    };
+    
+    return originalPage(options);
+  };
+}
+
+export function createPageMixin(pageName: string): Page.Options {
+  return {
+    onShow() {
+      const pages = getCurrentPages();
+      const currentPage = pages[pages.length - 1];
+      const pagePath = currentPage?.route || '';
+      analytics.pageView(pageName, pagePath);
+    },
+    
+    onHide() {
+      const pages = getCurrentPages();
+      const currentPage = pages[pages.length - 1];
+      const pagePath = currentPage?.route || '';
+      analytics.pageLeave(pageName, pagePath);
+    },
+    
+    onUnload() {
+      const pages = getCurrentPages();
+      const currentPage = pages[pages.length - 1];
+      const pagePath = currentPage?.route || '';
+      analytics.pageLeave(pageName, pagePath);
+    }
+  };
+}
+
+export function trackButtonClick(buttonName: string, properties: Record<string, any> = {}): void {
+  const pages = getCurrentPages();
+  const currentPage = pages[pages.length - 1];
+  const pagePath = currentPage?.route || '';
+  const pageName = PAGE_NAMES[pagePath] || pagePath;
+  
+  analytics.buttonClick(buttonName, pageName, properties as UTSJSONObject);
+}
+
+export function trackFormSubmit(formName: string, success: boolean, properties: Record<string, any> = {}): void {
+  analytics.formSubmit(formName, success, properties as UTSJSONObject);
+}
+
+export function trackError(errorType: string, errorMessage: string, properties: Record<string, any> = {}): void {
+  analytics.errorEvent(errorType, errorMessage, properties as UTSJSONObject);
+}

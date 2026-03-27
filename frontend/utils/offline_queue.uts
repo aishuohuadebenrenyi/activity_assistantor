@@ -1,4 +1,3 @@
-
 import { RequestOptions } from './api_types.uts'
 
 export type QueueItem = {
@@ -7,25 +6,46 @@ export type QueueItem = {
   data: any | null
   header: any | null
   timestamp: number
+  tempId?: number
+  retryCount?: number
+  maxRetry?: number
 }
 
 const QUEUE_KEY = 'offline_request_queue'
+const MAX_QUEUE_SIZE = 100
+const MAX_QUEUE_AGE = 7 * 24 * 60 * 60 * 1000
+const DEFAULT_MAX_RETRY = 3
 
 export const getQueue = (): QueueItem[] => {
   /**
    * 读取离线队列（本地持久化）。
-   *
+   * 
+   * 优化内容：
+   * - 添加过期清理：移除超过 7 天的旧请求
+   * - 添加大小限制：超过 100 条时移除最旧的
+   * 
    * 返回：
    * - QueueItem[]：按入队顺序排列的请求元数据数组（FIFO）。
-   *
-   * 注意：
-   * - uni.getStorageSync 的返回类型在 UTS 下需要谨慎处理；若出现类型不匹配，应做降级为空数组。
    */
   try {
     const data = uni.getStorageSync(QUEUE_KEY)
     if (data != null) {
-      // UTS 类型转换需要注意
-      return data as QueueItem[]
+      const queue = data as QueueItem[]
+      const now = Date.now()
+      
+      const validQueue = queue.filter((item: QueueItem) => {
+        return now - item.timestamp < MAX_QUEUE_AGE
+      })
+      
+      if (validQueue.length > MAX_QUEUE_SIZE) {
+        return validQueue.slice(-MAX_QUEUE_SIZE)
+      }
+      
+      if (validQueue.length !== queue.length) {
+        saveQueue(validQueue)
+      }
+      
+      return validQueue
     }
   } catch (e) {
     console.error('Failed to load offline queue', e)
@@ -36,12 +56,19 @@ export const getQueue = (): QueueItem[] => {
 export const saveQueue = (queue: QueueItem[]) => {
   /**
    * 写入离线队列到本地存储。
-   *
+   * 
+   * 优化内容：
+   * - 添加大小检查：超过限制时截断
+   * 
    * 参数：
    * - queue：待保存的队列数组
    */
   try {
-    uni.setStorageSync(QUEUE_KEY, queue)
+    let queueToSave = queue
+    if (queue.length > MAX_QUEUE_SIZE) {
+      queueToSave = queue.slice(-MAX_QUEUE_SIZE)
+    }
+    uni.setStorageSync(QUEUE_KEY, queueToSave)
   } catch (e) {
     console.error('Failed to save offline queue', e)
   }
@@ -49,47 +76,129 @@ export const saveQueue = (queue: QueueItem[]) => {
 
 export const addToQueue = (options: RequestOptions) => {
   /**
-   * 将一次“写请求”加入离线队列。
-   *
+   * 将一次"写请求"加入离线队列。
+   * 
+   * 优化内容：
+   * - 添加重试计数
+   * - 添加队列大小检查
+   * - 添加重复请求检测
+   * 
    * 入队条件由 request.uts 判断：
    * - 非 GET
    * - 当前离线
    * - 且未设置 skipQueue
-   *
+   * 
    * 参数：
    * - options：请求选项（会提取 url/method/data/header）
    */
   const queue = getQueue()
+  
+  const isDuplicate = queue.some((item: QueueItem) => {
+    return item.url === options.url && 
+           item.method === options.method &&
+           JSON.stringify(item.data) === JSON.stringify(options.data)
+  })
+  
+  if (isDuplicate) {
+    console.log('[OfflineQueue] Duplicate request, skipping')
+    return
+  }
+  
   const item = {
     url: options.url,
     method: options.method,
     data: options.data,
     header: options.header,
-    timestamp: Date.now()
+    timestamp: Date.now(),
+    retryCount: 0,
+    maxRetry: DEFAULT_MAX_RETRY
   } as QueueItem
+  
+  if (queue.length >= MAX_QUEUE_SIZE) {
+    queue.shift()
+    console.log('[OfflineQueue] Queue full, removed oldest item')
+  }
   
   queue.push(item)
   saveQueue(queue)
+  
   uni.showToast({
     title: '已存入离线队列',
     icon: 'none'
   })
+  
+  console.log(`[OfflineQueue] Added to queue, size: ${queue.length}`)
 }
 
-/**
- * 监听网络变化，自动处理离线队列
- */
+export const removeFromQueue = (index: number) => {
+  /**
+   * 从队列中移除指定索引的请求。
+   * 
+   * 参数：
+   * - index：要移除的请求索引
+   */
+  const queue = getQueue()
+  if (index >= 0 && index < queue.length) {
+    queue.splice(index, 1)
+    saveQueue(queue)
+    console.log(`[OfflineQueue] Removed item at index ${index}, remaining: ${queue.length}`)
+  }
+}
+
+export const incrementRetry = (index: number): boolean => {
+  /**
+   * 增加指定请求的重试计数。
+   * 
+   * 参数：
+   * - index：请求索引
+   * 
+   * 返回：
+   * - boolean：是否还可以继续重试
+   */
+  const queue = getQueue()
+  if (index >= 0 && index < queue.length) {
+    const item = queue[index]
+    item.retryCount = (item.retryCount || 0) + 1
+    
+    if (item.retryCount >= (item.maxRetry || DEFAULT_MAX_RETRY)) {
+      queue.splice(index, 1)
+      saveQueue(queue)
+      console.log(`[OfflineQueue] Max retry reached, removed item`)
+      return false
+    }
+    
+    saveQueue(queue)
+    return true
+  }
+  return false
+}
+
+export const clearQueue = () => {
+  /**
+   * 清空离线队列。
+   */
+  saveQueue([] as QueueItem[])
+  console.log('[OfflineQueue] Queue cleared')
+}
+
+export const getQueueSize = (): number => {
+  /**
+   * 获取队列当前大小。
+   */
+  return getQueue().length
+}
+
 export const setupNetworkListener = (processCallback: () => void) => {
   /**
    * 注册网络恢复监听器：当设备从离线变为在线时，触发队列重放回调。
-   *
+   * 
    * 参数：
-   * - processCallback：由上层传入的“处理队列”函数（通常是 request.uts 的 processQueue）
+   * - processCallback：由上层传入的"处理队列"函数（通常是 request.uts 的 processQueue）
    */
   uni.onNetworkStatusChange((res) => {
     if (res.isConnected) {
-      console.log('Network is back, processing offline queue...');
-      processCallback();
+      console.log('[OfflineQueue] Network restored, processing queue...')
+      processCallback()
     }
-  });
+  })
 }

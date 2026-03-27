@@ -15,6 +15,12 @@ from .models import db
 # 导入 request_id 与错误响应
 from .utils.request_id import init_request_id
 from .utils.errors import error_response
+# 导入统一响应格式和异常类
+from .utils.response import APIResponse, AppException
+# 导入统一日志管理
+from .utils.logger import init_app_logging, get_logger
+# 导入Swagger文档配置
+from .utils.swagger_config import init_swagger
 # 导入各个功能模块的蓝图 (Blueprint)
 from .routes.auth import auth_bp
 from .routes.activity import activity_bp
@@ -47,6 +53,11 @@ def create_app(config_class=Config):
     # 加载配置
     app.config.from_object(config_class)
     
+    # 初始化统一日志系统
+    init_app_logging(app)
+    logger = get_logger(__name__)
+    logger.info("Flask应用初始化开始", extra={'extra_data': {'config': config_class.__name__}})
+    
     # 初始化扩展
     # 初始化数据库连接
     db.init_app(app)
@@ -67,7 +78,11 @@ def create_app(config_class=Config):
     # 生产环境必须启用 HTTPS：force_https=True
     # 开发环境可以设置 force_https=False
     force_https = os.environ.get('FORCE_HTTPS', 'false').lower() == 'true'
-    Talisman(app, force_https=force_https) 
+    Talisman(app, force_https=force_https)
+    
+    # 初始化Swagger API文档
+    init_swagger(app)
+    logger.info("Swagger API文档初始化完成", extra={'extra_data': {'docs_url': '/apidocs'}}) 
     
     # 注册蓝图 (Blueprints)
     # 认证模块：处理登录、注册等
@@ -103,9 +118,22 @@ def create_app(config_class=Config):
             return error_response(code_map.get(e.code, f"HTTP_{e.code}"), e.description, status=e.code)
         return e
 
+    @app.errorhandler(AppException)
+    def _handle_app_exception(e):
+        """
+        处理应用自定义异常。
+        
+        统一处理 AppException 及其子类，返回标准化错误响应。
+        """
+        if request.path.startswith("/api"):
+            logger.warning(f"App exception: {e.code} - {e.message}")
+            return APIResponse.error(e.message, e.code, e.status)
+        raise e
+
     @app.errorhandler(Exception)
     def _handle_uncaught(e):
         if request.path.startswith("/api"):
+            logger.error(f"Unexpected exception: {str(e)}", exc_info=True)
             return error_response("INTERNAL_ERROR", "服务器开小差了，请稍后再试", status=500)
         raise e
 
@@ -115,7 +143,8 @@ def create_app(config_class=Config):
         return {
             "status": "online",
             "message": "Activity Assistant Backend API is running",
-            "docs": "/api/activities"
+            "docs": "/apidocs",
+            "health": "/health"
         }
 
     @app.route('/health')

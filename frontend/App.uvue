@@ -6,16 +6,22 @@
 	 * 主要职责：
 	 * - 启动时从本地恢复活动/用户状态；
 	 * - 监听网络变化，驱动离线队列重放与埋点上报；
-	 * - 捕获全局错误并进行轻量提示（避免用户无感知崩溃）。
+	 * - 捕获全局错误并进行轻量提示（避免用户无感知崩溃）；
+	 * - 初始化友盟+统计SDK。
 	 */
-	import { setOnlineStatus, loadFromStorage } from '@/store/index.uts'
+	import { setOnlineStatus, loadFromStorage, activitiesState, User } from '@/store/index.uts'
 	import { logEvent, flushEvents } from '@/utils/analytics.uts'
 	import { processQueue } from '@/utils/request.uts'
-	import { config, CLEAR_CACHE_ON_START } from '@/utils/config.uts'
+	import { config, CLEAR_CACHE_ON_START, USE_MOCK } from '@/utils/config.uts'
+	import { MOCK_USER } from '@/mock/data.uts'
+	import { initUmeng, setUmengUserId, trackUmengEvent, UmengEvent } from '@/utils/analytics/umeng.uts'
 
 	export default {
 		onLaunch: function() {
 			console.log('App Launch')
+			
+			// 初始化友盟+统计
+			initUmeng()
 			
 			// 0. 如果配置了清除缓存，则执行清除操作（调试模式）
 			if (CLEAR_CACHE_ON_START) {
@@ -29,6 +35,21 @@
 
 			// 1. 初始化本地存储数据
 			loadFromStorage();
+			
+			// 1.5 Mock 模式下自动设置模拟用户
+			if (USE_MOCK && activitiesState.user == null) {
+				console.log('[Mock] Setting mock user...');
+				const mockUser: User = {
+					id: MOCK_USER.id,
+					phone: MOCK_USER.phone,
+					username: MOCK_USER.username,
+					avatar_url: MOCK_USER.avatar_url,
+					bio: MOCK_USER.bio,
+					is_certified: MOCK_USER.is_certified,
+					token: MOCK_USER.token
+				};
+				activitiesState.user = mockUser;
+			}
 			
 			// 2. 检查初始网络状态
 			uni.getNetworkType({

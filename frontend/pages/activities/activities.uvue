@@ -176,7 +176,9 @@
 		},
 		computed: {
 			activities() {
-				return activitiesState.activities;
+				const user = activitiesState.user;
+				if (user == null) return [];
+				return activitiesState.activities.filter((a: any): boolean => a.organizer_id === user.id);
 			},
 			isOnline() {
 				return networkState.isOnline;
@@ -191,17 +193,17 @@
 				return this.activities.length;
 			},
 			totalParticipants() {
-				return this.activities.reduce((sum, a) => sum + (a.participants || 0), 0);
+				return this.activities.reduce((sum: number, a: any): number => sum + (a.participants || 0), 0);
 			},
 			totalCheckins() {
-				return this.activities.reduce((sum, a) => sum + (a.checkins || 0), 0);
+				return this.activities.reduce((sum: number, a: any): number => sum + (a.checkins || 0), 0);
 			},
 			avgRate() {
 				if (this.totalParticipants === 0) return 0;
 				return Math.round((this.totalCheckins / this.totalParticipants) * 100);
 			},
 			filteredActivities() {
-				let list = this.activities.filter(activity => {
+				let list = this.activities.filter((activity: any): boolean => {
 					if (this.currentFilter !== 'all' && activity.status !== this.currentFilter) {
 						return false;
 					}
@@ -213,11 +215,11 @@
 					return true;
 				});
 
-				return list.sort((a, b) => {
+				return list.sort((a: any, b: any): number => {
 					const dateA = new Date(`${a.date}T${a.time}`);
 					const dateB = new Date(`${b.date}T${b.time}`);
 					
-					const getStatusPriority = (status) => {
+					const getStatusPriority = (status: string): number => {
 						if (status === 'ongoing') return 1;
 						if (status === 'upcoming') return 2;
 						return 3;

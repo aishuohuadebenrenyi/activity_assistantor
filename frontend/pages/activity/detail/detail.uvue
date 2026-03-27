@@ -97,7 +97,7 @@
 					<text class="card-header-title">详细信息</text>
 					<view class="header-actions">
 						<!-- #ifndef MP-WEIXIN -->
-						<button class="btn btn-primary btn-sm" @click="toggleEdit" hover-class="hover-opacity" :aria-label="isEditing ? '完成编辑' : '编辑活动'">
+						<button v-if="isOrganizer" class="btn btn-primary btn-sm" @click="toggleEdit" hover-class="hover-opacity" :aria-label="isEditing ? '完成编辑' : '编辑活动'">
 							<text class="btn-text btn-text-sm">{{ isEditing ? '完成' : '编辑' }}</text>
 						</button>
 						<!-- #endif -->
@@ -143,17 +143,17 @@
 
 			<!-- #ifndef MP-WEIXIN -->
 			<!-- 活动工具：仅在 App 端显示，用于管理报名和分享 -->
-			<view class="tools-card card">
+			<view v-if="isOrganizer" class="tools-card card">
 				<view class="card-header">
 					<text class="card-header-title">活动工具</text>
 				</view>
 				<view class="card-content">
 					<view class="tools-grid-compact">
-						<view class="tool-item-compact" @click="goToParticipants" hover-class="hover-opacity">
-							<view class="tool-icon-compact blue-bg">
-								<text class="tool-icon">👤</text>
+						<view class="tool-item-compact" @click="goToCheckin" hover-class="hover-opacity">
+							<view class="tool-icon-compact green-bg">
+								<text class="tool-icon">✓</text>
 							</view>
-							<text class="tool-label-compact">报名情况</text>
+							<text class="tool-label-compact">签到管理</text>
 						</view>
 						<view class="tool-item-compact" @click="onShare" hover-class="hover-opacity">
 							<view class="tool-icon-compact orange-bg">
@@ -247,6 +247,7 @@
 					type: '',
 					date: '',
 					time: '',
+					endTime: null,
 					location: '',
 					description: '',
 					capacity: 0,
@@ -278,6 +279,11 @@
 			hasContactInfo(): boolean {
 				return (this.activity.host_phone != null && this.activity.show_phone) || 
 					   (this.activity.host_wechat != null && this.activity.show_wechat);
+			},
+			isOrganizer(): boolean {
+				const user = activitiesState.user;
+				if (user == null) return false;
+				return this.activity.organizer_id === user.id;
 			}
 		},
 		methods: {
@@ -353,12 +359,12 @@
 					uni.hideLoading();
 				}
 			},
-			goToParticipants() {
+			goToCheckin() {
 				if (!this.isActivityValid) {
 					uni.showToast({ title: '活动不存在', icon: 'none' });
 					return;
 				}
-				logEvent('detail_participants_click', { id: this.activityId });
+				logEvent('detail_checkin_click', { id: this.activityId });
 				uni.navigateTo({
 					url: `/pages/activity/participants/participants?id=${this.activityId}`
 				});
@@ -805,6 +811,7 @@
 	}
 
 	.blue-bg { background-color: rgba(0, 122, 255, 0.1); }
+	.green-bg { background-color: rgba(52, 199, 89, 0.1); }
 	.orange-bg { background-color: rgba(255, 149, 0, 0.1); }
 	.red-bg { background-color: rgba(255, 59, 48, 0.1); }
 

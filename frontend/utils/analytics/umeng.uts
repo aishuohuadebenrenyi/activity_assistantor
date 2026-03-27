@@ -1,0 +1,87 @@
+import { 
+  AnalyticsEvent, 
+  AnalyticsPage, 
+  AnalyticsProperties,
+  LoginMethod,
+  CheckinMethod,
+  ShareMethod,
+  ActivitySource,
+  ErrorType,
+  ReportReason,
+  ThemeMode,
+  analytics,
+  initAnalytics,
+  setAnalyticsUserId,
+  trackEvent,
+  trackPageView,
+  trackPageLeave,
+  trackAppLaunch,
+  trackAppShow,
+  trackAppHide
+} from './events.uts'
+
+export {
+  AnalyticsEvent,
+  AnalyticsPage,
+  AnalyticsProperties,
+  LoginMethod,
+  CheckinMethod,
+  ShareMethod,
+  ActivitySource,
+  ErrorType,
+  ReportReason,
+  ThemeMode,
+  analytics,
+  initAnalytics,
+  setAnalyticsUserId,
+  trackEvent,
+  trackPageView,
+  trackPageLeave,
+  trackAppLaunch,
+  trackAppShow,
+  trackAppHide
+}
+
+export const UmengEvent = AnalyticsEvent
+
+export function initUmeng(): void {
+  initAnalytics()
+}
+
+export function setUmengUserId(userId: string | null): void {
+  setAnalyticsUserId(userId)
+}
+
+export function trackUmengEvent(event: AnalyticsEvent | string, properties: AnalyticsProperties = {}): void {
+  trackEvent(event, properties)
+}
+
+export function trackUmengPageView(pageName: AnalyticsPage | string): void {
+  trackPageView(pageName)
+}
+
+export function trackUmengPageLeave(): void {
+  trackPageLeave()
+}
+
+export const PAGE_NAMES: Record<string, string> = {
+  'pages/activities/activities': 'activities',
+  'pages/activity/create/create': 'create_activity',
+  'pages/activity/detail/detail': 'activity_detail',
+  'pages/activity/participants/participants': 'participants',
+  'pages/activity/share/share': 'share',
+  'pages/activity/success/success': 'success',
+  'pages/activity/ticket/ticket': 'ticket',
+  'pages/profile/profile': 'profile',
+  'pages/profile/edit/edit': 'profile_edit',
+  'pages/profile/feedback/feedback': 'feedback',
+  'pages/auth/login': 'login',
+  'pages/user/my-activities/my-activities': 'my_activities',
+  'pages/user/created-activities/created-activities': 'created_activities',
+  'pages/about/about': 'about',
+  'pages/webview/webview': 'webview'
+}
+
+export function getPageNameFromPath(path: string): string {
+  return PAGE_NAMES[path] || path
+}

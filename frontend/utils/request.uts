@@ -6,6 +6,7 @@ import { RequestOptions } from './api_types.uts'
 import { handleMockRequest } from '@/mock/index.uts'
 import { generateIdempotencyKey } from './idempotency.uts'
 import { getClientPlatform } from '@/adapters/platform.uts'
+import { updateActivityIdMapping } from './id_mapping.uts'
 
 // 重新导出，方便其他文件引用
 export { RequestOptions } from './api_types.uts'
@@ -136,6 +137,7 @@ export const processQueue = async () => {
   uni.showLoading({ title: '正在同步离线数据...' })
   
   const failedQueue: QueueItem[] = []
+  const successItems: { item: QueueItem, response: any }[] = []
   
   // 逐个处理队列
   for (let i = 0; i < queue.length; i++) {
@@ -150,7 +152,8 @@ export const processQueue = async () => {
         true // skipQueue
       )
       
-      await request(options)
+      const response = await request<any>(options)
+      successItems.push({ item, response })
       
     } catch (e) {
       console.error('Failed to process queue item', e)
@@ -160,6 +163,14 @@ export const processQueue = async () => {
   
   // 更新队列为失败的项目
   saveQueue(failedQueue)
+  
+  // 处理成功同步的项目，更新本地临时ID为真实ID
+  for (const { item, response } of successItems) {
+    if (item.tempId != null && response != null && response.id != null) {
+      updateActivityIdMapping(item.tempId, response.id, response)
+    }
+  }
+  
   isProcessingQueue = false
   uni.hideLoading()
   

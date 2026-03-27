@@ -91,6 +91,7 @@
 	import { activitiesState, User, saveToStorage } from '@/store/index.uts'
 	import { config } from '@/utils/config.uts'
 	import { LoginResponse } from '@/utils/api_types.uts'
+	import { setUmengUserId, trackUmengEvent, UmengEvent } from '@/utils/analytics/umeng.uts'
 
 	type AppleLoginResult = {
 		identity_token: string | null
@@ -204,6 +205,13 @@
 					} as User;
 					
 					saveToStorage();
+					
+					// 友盟+ 登录成功埋点
+					setUmengUserId(res.user.id.toString());
+					trackUmengEvent(UmengEvent.USER_LOGIN, {
+						login_method: 'phone',
+						is_new_user: false
+					});
 					
 					if (this.bindPhoneMode) {
 						uni.showToast({ title: '绑定成功', icon: 'success' });

@@ -112,12 +112,20 @@ export function mapBackendToFrontend(data: ActivityResponse): Activity {
    *
    * 转换点：
    * - start_time（ISO）拆分为 date/time 字段；
+   * - end_time（ISO）转换为前端格式；
    * - checkin_records 补齐 name/phone（通过 registrations 关联）；
    * - participants/checkins/views 等统计字段做前端友好映射。
    */
   const dt = new Date(data.start_time);
   const dateStr = `${dt.getFullYear()}-${(dt.getMonth()+1).toString().padStart(2, '0')}-${dt.getDate().toString().padStart(2, '0')}`;
   const timeStr = `${dt.getHours().toString().padStart(2, '0')}:${dt.getMinutes().toString().padStart(2, '0')}`;
+  
+  // 处理结束时间
+  let endTimeStr: string | null = null;
+  if (data.end_time != null) {
+    const endDt = new Date(data.end_time);
+    endTimeStr = `${endDt.getHours().toString().padStart(2, '0')}:${endDt.getMinutes().toString().padStart(2, '0')}`;
+  }
   
   // 转换签到记录
   const checkinRecords: CheckinRecord[] = [];
@@ -144,6 +152,7 @@ export function mapBackendToFrontend(data: ActivityResponse): Activity {
     data.registrations.forEach((r) => {
       registrations.push({
         id: r.id,
+        userId: r.user_id,
         name: r.name,
         phone: r.phone,
         createdAt: r.created_at,
@@ -159,6 +168,7 @@ export function mapBackendToFrontend(data: ActivityResponse): Activity {
     type: data.type,
     date: dateStr,
     time: timeStr,
+    endTime: endTimeStr,
     location: data.location,
     description: data.description,
     capacity: data.capacity,
@@ -261,6 +271,7 @@ export const addActivity = async (activity: Activity): Promise<Activity> => {
    * 离线策略：
    * - 若 request() 抛出 OFFLINE_QUEUED，则不回滚本地新增；
    * - 由于后端尚未返回真实 id，这里会分配负数临时 id 以便 UI 可继续工作。
+   * - 同步成功后会建立临时ID与真实ID的映射关系。
    */
   // 乐观更新：先添加到本地
   activitiesState.activities.push(activity);
@@ -295,7 +306,8 @@ export const addActivity = async (activity: Activity): Promise<Activity> => {
     if (e instanceof Error && e.message === 'OFFLINE_QUEUED') {
         console.log('Activity creation queued offline');
         // 给活动分配临时负数 ID，并标记为待同步状态
-        activity.id = -Date.now(); 
+        const tempId = -Date.now();
+        activity.id = tempId; 
         activity.syncStatus = 'pending';
         saveToStorage();
         logEvent('activity_create_offline_queued', { tempId: activity.id, name: activity.name });

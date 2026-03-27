@@ -66,10 +66,11 @@ def register(activity_id):
     - phone: 报名人手机号（必填）
 
     业务规则：
-    - 以 (activity_id, phone) 判断重复报名；重复则返回错误；
+    - 以 (activity_id, user_id) 判断重复报名（已登录用户）；
+    - 以 (activity_id, phone) 判断重复报名（未关联用户场景）；
     - 校验活动状态（已结束的活动不可报名）；
     - 校验活动容量（名额已满不可报名）；
-    - 当前 Registration 模型未强制绑定 user_id，因此允许"代报名"或未实名场景。
+    - 自动关联当前登录用户的 user_id。
 
     返回：
     - 201: 报名成功，返回 Registration；
@@ -78,6 +79,7 @@ def register(activity_id):
     from datetime import datetime
     
     activity = Activity.query.get_or_404(activity_id)
+    user = request.user
     
     if activity.status == 'ended':
         return jsonify({'error': '活动已结束，无法报名'}), 400
@@ -96,12 +98,19 @@ def register(activity_id):
     
     if not name or not phone:
         return jsonify({'error': 'Missing name or phone'}), 400
+    
+    # 优先通过 user_id 检查重复报名
+    if user.id:
+        existing_by_user = Registration.query.filter_by(activity_id=activity_id, user_id=user.id).first()
+        if existing_by_user:
+            return jsonify({'error': '您已经报名过此活动'}), 400
+    
+    # 同时检查手机号重复（防止同一用户换手机号重复报名）
+    existing_by_phone = Registration.query.filter_by(activity_id=activity_id, phone=phone).first()
+    if existing_by_phone:
+        return jsonify({'error': '该手机号已报名过此活动'}), 400
         
-    existing = Registration.query.filter_by(activity_id=activity_id, phone=phone).first()
-    if existing:
-        return jsonify({'error': '您已经报名过此活动'}), 400
-        
-    reg = Registration(activity_id=activity_id, name=name, phone=phone)
+    reg = Registration(activity_id=activity_id, user_id=user.id, name=name, phone=phone)
     db.session.add(reg)
     db.session.commit()
     
@@ -114,7 +123,8 @@ def cancel_registration(activity_id):
     取消报名（需要登录）。
 
     业务规则：
-    - 通过当前用户的手机号匹配报名记录；
+    - 优先通过 user_id 匹配报名记录；
+    - 若 user_id 未匹配，则通过 phone 匹配（兼容旧数据）；
     - 已签到的报名不可取消；
     - 活动已开始后不可取消。
 
@@ -128,10 +138,13 @@ def cancel_registration(activity_id):
     user = request.user
     activity = Activity.query.get_or_404(activity_id)
     
-    if not user.phone:
-        return jsonify({'error': '用户未绑定手机号'}), 400
+    # 优先通过 user_id 查找报名记录
+    registration = Registration.query.filter_by(activity_id=activity_id, user_id=user.id).first()
     
-    registration = Registration.query.filter_by(activity_id=activity_id, phone=user.phone).first()
+    # 兼容旧数据：通过 phone 匹配
+    if not registration and user.phone:
+        registration = Registration.query.filter_by(activity_id=activity_id, phone=user.phone).first()
+    
     if not registration:
         return jsonify({'error': '您尚未报名此活动'}), 400
     

@@ -1,9 +1,12 @@
 import hashlib
 import json
+import logging
 from functools import wraps
 from flask import request, make_response
 from ..models import db, IdempotencyKey
 from .errors import error_response
+
+logger = logging.getLogger(__name__)
 
 
 def _hash_request(method: str, path: str, body) -> str:
@@ -61,7 +64,9 @@ def idempotent(f):
         existing = IdempotencyKey.query.filter_by(key=key).first()
         if existing:
             if existing.method != method or existing.path != path or existing.request_hash != request_hash:
+                logger.warning(f"[IDEMPOTENCY] Key conflict: key={key[:16]}..., path={path}, user_id={user_id}")
                 return error_response("IDEMPOTENCY_CONFLICT", "幂等键冲突", status=409)
+            logger.info(f"[IDEMPOTENCY] Replay response: key={key[:16]}..., path={path}, status={existing.response_status}")
             resp = make_response(existing.response_body, existing.response_status)
             resp.headers["Content-Type"] = "application/json; charset=utf-8"
             resp.headers["Idempotent-Replay"] = "1"
@@ -86,6 +91,7 @@ def idempotent(f):
         )
         db.session.add(record)
         db.session.commit()
+        logger.debug(f"[IDEMPOTENCY] Key saved: key={key[:16]}..., path={path}, status={resp.status_code}")
         return resp
 
     return decorated

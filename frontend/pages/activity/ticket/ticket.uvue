@@ -89,12 +89,6 @@
       </view>
 
       <view class="action-area">
-        <!-- #ifdef MP-WEIXIN -->
-        <button class="action-btn primary-btn" @click="scanCheckIn">
-            <text class="btn-icon">📷</text>
-            <text class="btn-text">扫码签到</text>
-        </button>
-        <!-- #endif -->
         <button v-if="!checkedIn" class="action-btn danger-btn" @click="confirmCancel">
             <text class="btn-text danger-text">取消报名</text>
         </button>
@@ -198,47 +192,6 @@ export default {
             uni.showToast({ title: '获取电子票失败', icon: 'none' })
         }
     },
-    // #ifdef MP-WEIXIN
-    async scanCheckIn() {
-      uni.scanCode({
-        success: async (res) => {
-          const qrData = res.result
-          console.log('Scan success:', qrData)
-          
-          if (!qrData.startsWith('CHECKIN:')) {
-            uni.showToast({ title: '无效的签到码', icon: 'none' })
-            return
-          }
-          
-          uni.showLoading({ title: '核销中...' })
-          try {
-            type CheckinResponse = {
-              message: string
-              user: string
-              already_checked: boolean
-            }
-            
-            const result = await request<CheckinResponse>(
-              new RequestOptions(`/activities/${this.activity?.id}/checkin`, 'POST', { qr_data: qrData })
-            )
-            
-            uni.hideLoading()
-            if (result.already_checked) {
-              uni.showToast({ title: '您已签到过了', icon: 'none' })
-            } else {
-              uni.showToast({ title: '签到成功', icon: 'success' })
-            }
-          } catch (e) {
-            uni.hideLoading()
-            console.error('Checkin failed', e)
-          }
-        },
-        fail: (err) => {
-          console.error('Scan failed:', err)
-        }
-      })
-    },
-    // #endif
     openLocation() {
         if (!this.activity?.location) {
             uni.showToast({ title: '地点待定', icon: 'none' })
@@ -601,14 +554,9 @@ export default {
     align-items: center;
 }
 
-.primary-btn {
-    background-color: #007AFF;
-    box-shadow: 0 4px 12px rgba(0, 122, 255, 0.2);
-}
-
 .secondary-btn {
-    background-color: #fff;
-    border: 1px solid #E5E5EA;
+  background-color: #fff;
+  border: 1px solid #E5E5EA;
 }
 
 .danger-btn {
@@ -616,16 +564,10 @@ export default {
     border: 1px solid #FF3B30;
 }
 
-.btn-icon {
-    font-size: 18px;
-    color: #fff;
-    margin-right: 8px;
-}
-
 .btn-text {
-    font-size: 16px;
-    font-weight: 600;
-    color: #fff;
+  font-size: 16px;
+  font-weight: 600;
+  color: #fff;
 }
 
 .secondary-text {
